@@ -28,7 +28,7 @@ def desenhar_ecra_login():
             def iniciar_login_google():
                 resposta = supabase.auth.sign_in_with_oauth({
                     "provider": "google",
-                    "options": {"redirect_to": "http://localhost:8080/autenticacao"}
+                    "options": {"redirect_to": "https://prime7.onrender.com/autenticacao"}
                 })
                 ui.navigate.to(resposta.url)
 
@@ -36,7 +36,7 @@ def desenhar_ecra_login():
                 resposta = supabase.auth.sign_in_with_oauth({
                     "provider": "azure",
                     "options": {
-                        "redirect_to": "http://localhost:8080/autenticacao",
+                        "redirect_to": "https://prime7.onrender.com/autenticacao",
                         "scopes": "email"
                     }
                 })
