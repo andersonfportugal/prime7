@@ -25,6 +25,16 @@ def formatar_moeda_brasil(valor):
     return f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def conectar_sqlite_seguro(caminho):
+    """Abre a conexão aplicando os pragmas necessários para evitar erros de Database Locked"""
+    conn = sqlite3.connect(caminho)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode = WAL;")
+    cursor.execute("PRAGMA busy_timeout = 5000;")
+    cursor.execute("PRAGMA synchronous = NORMAL;")
+    return conn
+
+
 def obter_dados_dashboard_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -35,7 +45,7 @@ def obter_dados_dashboard_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query_vendas = """
                 SELECT data_venda, filial, loja, venda_venda_real 
                 FROM vw_relatorio_venda_venda 
@@ -164,7 +174,7 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, motoboy, data_entrega 
                 FROM vw_logistica_entregas 
@@ -229,7 +239,7 @@ def obter_dados_vendedores_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT data_venda, id_vendedor, vendedor, participacao_em_vendas, valor_total_vendido 
                 FROM vw_vendas_por_vendedor 
@@ -242,15 +252,19 @@ def obter_dados_vendedores_fast(mes, ano):
             df = pd.DataFrame(columns=['data_venda', 'id_vendedor', 'vendedor', 'participacao_em_vendas', 'valor_total_vendido'])
     else:
         try:
+            # FILTRO CORRETO PARA A NUVEM: Pega do dia 01/01 até 31/12 do ano selecionado
+            data_inicio_ano = f"{ano}-01-01"
+            data_fim_ano = f"{ano}-12-31"
+
             r = supabase.table("vw_vendas_por_vendedor") \
                 .select("data_venda, id_vendedor, vendedor, participacao_em_vendas, valor_total_vendido") \
-                .or_(f"data_venda.like.{ano}-%,data_venda.like.%/{ano}") \
+                .gte("data_venda", data_inicio_ano) \
+                .lte("data_venda", data_fim_ano) \
                 .execute()
-            df = pd.DataFrame(r.data)
+            df = pd.read_json(r.data) if isinstance(r.data, str) else pd.DataFrame(r.data)
         except Exception as e:
             print(f"Erro no Supabase (Vendedores): {e}")
             df = pd.DataFrame(columns=['data_venda', 'id_vendedor', 'vendedor', 'participacao_em_vendas', 'valor_total_vendido'])
-
     if df.empty:
         return {}, {}, {}
 
@@ -305,7 +319,7 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, data_venda, categoria_macro, valor_total_vendido 
                 FROM vw_vendas_por_categoria 
@@ -373,7 +387,7 @@ def obter_dados_picos_horario_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, dia_semana, hora_venda, qtd_atendimentos 
                 FROM vw_vendas_por_hora 
@@ -439,7 +453,7 @@ def obter_dados_compras_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, data_emissao, numero_nota, status_nota, fornecedor, valor_total 
                 FROM vw_resumo_notas_fiscais 
@@ -491,7 +505,7 @@ def obter_dados_pagamentos_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, forma_pagamento, total_liquido 
                 FROM vw_venda_por_pagamento_real 
@@ -544,7 +558,7 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
 
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
                 SELECT filial, loja, data_venda, forma_pagamento, total_liquido 
                 FROM vw_venda_por_pagamento_real 
@@ -622,7 +636,7 @@ def obter_resumo_rapido_fast(modo, data_iso):
     # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query_vendas = """
                 SELECT filial, loja, venda_venda_real 
                 FROM vw_relatorio_venda_venda 
@@ -665,7 +679,7 @@ def obter_resumo_rapido_fast(modo, data_iso):
     # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query_compras = """
                 SELECT filial, loja, valor_total 
                 FROM vw_resumo_notas_fiscais 
@@ -711,7 +725,7 @@ def obter_resumo_rapido_fast(modo, data_iso):
     
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query_vend = """
                 SELECT data_venda, vendedor, valor_total_vendido 
                 FROM vw_vendas_por_vendedor 
@@ -726,7 +740,8 @@ def obter_resumo_rapido_fast(modo, data_iso):
         try:
             r_vend = supabase.table("vw_vendas_por_vendedor") \
                 .select("data_venda, vendedor, valor_total_vendido") \
-                .or_(f"data_venda.like.{ano_str}-{mes_str}-%,data_venda.like.%/{mes_str}/{ano_str}") \
+                .gte("data_venda", data_inicio) \
+                .lte("data_venda", data_fim) \
                 .execute()
             df_vend = pd.DataFrame(r_vend.data)
         except Exception as e:
@@ -761,7 +776,7 @@ def obter_resumo_rapido_fast(modo, data_iso):
     # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
-            conn = sqlite3.connect(CAMINHO_BANCO_LOCAL)
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             # Trazemos a coluna 'motoboy' da View
             query_ent = """
                 SELECT motoboy 
@@ -803,5 +818,4 @@ def obter_resumo_rapido_fast(modo, data_iso):
     # Ordena os motoboys pelo volume de corridas (do maior para o menor)
     dados_motoboys = sorted(dados_motoboys, key=lambda x: x['corridas'], reverse=True)
 
-    # Não esqueças de adicionar o dados_motoboys no retorno da função!
     return resumo_lojas, resumo_vendedores, total_entregas, dados_motoboys
