@@ -207,9 +207,14 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
 
     mapa_lojas = dict(zip(df['filial'], df['loja']))
 
-    df['data_entrega'] = pd.to_datetime(df['data_entrega'], errors='coerce')
-    df['mes'] = df['data_entrega'].dt.month
+    # CORREÇÃO CIRÚRGICA PARA O RENDER: Garante que a data vire string limpa no formato YYYY-MM-DD
+    # Evita que o fuso horário UTC do Render altere o dia/mês do registro.
+    df['data_entrega_str'] = df['data_entrega'].astype(str).str[:10]
+    
+    # Extrai o mês cortando os caracteres da string diretamente (Ex: '2026-06-29' -> '06' -> 6)
+    df['mes'] = df['data_entrega_str'].str[5:7].astype(int)
 
+    # Filtra o mês selecionado usando o índice imutável da string
     df_mes = df[df['mes'] == mes_selecionado]
 
     tot_entregas = len(df_mes)
@@ -222,14 +227,16 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
     loja_mes = df.groupby(['filial', 'mes']).size().reset_index(name='qtd')
     for _, r in loja_mes.iterrows():
         mes_idx = int(r['mes']) - 1
-        evo_lojas[str(r['filial'])][mes_idx] = int(r['qtd'])
+        if 0 <= mes_idx < 12:
+            evo_lojas[str(r['filial'])][mes_idx] = int(r['qtd'])
 
     motoboys_unicos = df['motoboy'].unique()
     evo_mbs = {mb: [0] * 12 for mb in motoboys_unicos}
     mb_mes = df.groupby(['motoboy', 'mes']).size().reset_index(name='qtd')
     for _, r in mb_mes.iterrows():
         mes_idx = int(r['mes']) - 1
-        evo_mbs[str(r['motoboy'])][mes_idx] = int(r['qtd'])
+        if 0 <= mes_idx < 12:
+            evo_mbs[str(r['motoboy'])][mes_idx] = int(r['qtd'])
 
     return tot_entregas, dict_filiais, ranking, evo_lojas, evo_mbs, mapa_lojas
 
@@ -252,7 +259,7 @@ def obter_dados_vendedores_fast(mes, ano):
             df = pd.DataFrame(columns=['data_venda', 'id_vendedor', 'vendedor', 'participacao_em_vendas', 'valor_total_vendido'])
     else:
         try:
-            # FILTRO CORRETO PARA A NUVEM: Pega do dia 01/01 até 31/12 do ano selecionado
+            # Filtra o ano completo direto na API do Supabase de forma otimizada
             data_inicio_ano = f"{ano}-01-01"
             data_fim_ano = f"{ano}-12-31"
 
@@ -261,15 +268,20 @@ def obter_dados_vendedores_fast(mes, ano):
                 .gte("data_venda", data_inicio_ano) \
                 .lte("data_venda", data_fim_ano) \
                 .execute()
-            df = pd.read_json(r.data) if isinstance(r.data, str) else pd.DataFrame(r.data)
+            df = pd.DataFrame(r.data)
         except Exception as e:
             print(f"Erro no Supabase (Vendedores): {e}")
             df = pd.DataFrame(columns=['data_venda', 'id_vendedor', 'vendedor', 'participacao_em_vendas', 'valor_total_vendido'])
+
     if df.empty:
         return {}, {}, {}
 
-    df['data_datetime'] = pd.to_datetime(df['data_venda'], errors='coerce')
-    df['mes_int'] = df['data_datetime'].dt.month
+    # CORREÇÃO CRÍTICA PARA O RENDER (Ignora o fuso horário UTC do Linux)
+    # Forçamos a coluna a virar string e pegamos os 10 primeiros caracteres (YYYY-MM-DD)
+    df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
+    
+    # Cortamos direto a string para descobrir o mês de forma imutável (Ex: '2026-06-29' -> '06' -> 6)
+    df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
     
     df['id_vendedor'] = df['id_vendedor'].astype(str).str.strip()
     df['vendedor'] = df['vendedor'].astype(str).str.strip().str.upper()
@@ -282,6 +294,7 @@ def obter_dados_vendedores_fast(mes, ano):
 
     lista_vend_ids = sorted(list(mapa_vendedores.keys()))
 
+    # Agora a filtragem por mês vai bater exatamente com o que está escrito no banco
     df_mes = df[df['mes_int'] == mes]
     resumo_mes_vendedores = {}
     
@@ -307,7 +320,6 @@ def obter_dados_vendedores_fast(mes, ano):
                 evolucao_vendedores[vid][m_idx] = float(r['valor_total_vendido'])
 
     return resumo_mes_vendedores, evolucao_vendedores, mapa_vendedores
-
 
 def obter_dados_vendas_classificacao_fast(mes, ano):
     import pandas as pd
@@ -400,30 +412,47 @@ def obter_dados_picos_horario_fast(mes, ano):
             df = pd.DataFrame(columns=['filial', 'loja', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
     else:
         try:
+            # Puxa o ano inteiro ou os limites corretos da nuvem
+            data_inicio_ano = f"{ano}-01-01"
+            data_fim_ano = f"{ano}-12-31"
+
             r = supabase.table("vw_vendas_por_hora") \
-                .select("filial, loja, dia_semana, hora_venda, qtd_atendimentos") \
-                .gte("data_venda", data_inicio) \
-                .lte("data_venda", data_fim) \
+                .select("filial, loja, data_venda, dia_semana, hora_venda, qtd_atendimentos") \
+                .gte("data_venda", data_inicio_ano) \
+                .lte("data_venda", data_fim_ano) \
                 .execute()
             df = pd.DataFrame(r.data)
         except Exception as e:
             print(f"Erro no Supabase (Picos Horario): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
 
     if df.empty:
         return {}, [], {}, []
 
+    # CORREÇÃO DO FUSO HORÁRIO NO RENDER: Corta o mês direto do texto YYYY-MM-DD
+    df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
+    df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
+
     df['filial'] = df['filial'].astype(str).str.strip()
     df['loja'] = df['loja'].astype(str).str.strip().str.upper()
     df['dia_semana'] = df['dia_semana'].astype(str).str.strip()
+    
+    # Garante que a coluna de atendimentos seja numérica pura
     df['qtd_atendimentos'] = pd.to_numeric(df['qtd_atendimentos'], errors='coerce').fillna(0)
 
+    # Formata a hora adicionando o 'h' (Ex: '14:00' -> '14h')
     df['hora_venda'] = df['hora_venda'].astype(str).str[:2] + 'h'
 
     mapa_lojas = dict(zip(df['filial'], df['loja']))
     lista_ids = sorted(list(mapa_lojas.keys()))
 
-    agrupado = df.groupby(['filial', 'dia_semana', 'hora_venda'])['qtd_atendimentos'].sum().reset_index()
+    # Filtra o mês selecionado usando a nossa coluna de string blindada
+    df_mes = df[df['mes_int'] == mes]
+
+    if df_mes.empty:
+        return {}, [], mapa_lojas, []
+
+    agrupado = df_mes.groupby(['filial', 'dia_semana', 'hora_venda'])['qtd_atendimentos'].sum().reset_index()
 
     tempos_unicos = sorted(agrupado['hora_venda'].unique().tolist())
     
