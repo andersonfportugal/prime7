@@ -507,26 +507,26 @@ def obter_dados_pagamentos_fast(mes, ano):
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
-                SELECT filial, loja, forma_pagamento, total_liquido 
-                FROM vw_venda_por_pagamento_real 
+                SELECT filial, loja, forma_pagamento, valor_liquido_real 
+                FROM vw_vendas_por_pagamento 
                 WHERE data_venda >= ? AND data_venda <= ?
             """
             df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
             conn.close()
         except Exception as e:
             print(f"Erro no Banco Local (Pagamentos): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'forma_pagamento', 'total_liquido'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'forma_pagamento', 'valor_liquido_real'])
     else:
         try:
-            r = supabase.table("vw_venda_por_pagamento_real") \
-                .select("filial, loja, forma_pagamento, total_liquido") \
+            r = supabase.table("vw_vendas_por_pagamento") \
+                .select("filial, loja, forma_pagamento, valor_liquido_real") \
                 .gte("data_venda", data_inicio) \
                 .lte("data_venda", data_fim) \
                 .execute()
             df = pd.DataFrame(r.data)
         except Exception as e:
             print(f"Erro no Supabase (Pagamentos): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'forma_pagamento', 'total_liquido'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'forma_pagamento', 'valor_liquido_real'])
 
     if df.empty:
         return {}, {}
@@ -534,16 +534,16 @@ def obter_dados_pagamentos_fast(mes, ano):
     df['filial'] = df['filial'].astype(str).str.strip()
     df['loja'] = df['loja'].astype(str).str.strip().str.upper()
     df['forma_pagamento'] = df['forma_pagamento'].fillna('NÃO INFORMADO').astype(str).str.strip().str.upper()
-    df['total_liquido'] = pd.to_numeric(df['total_liquido'], errors='coerce').fillna(0.0)
+    df['valor_liquido_real'] = pd.to_numeric(df['valor_liquido_real'], errors='coerce').fillna(0.0)
 
     mapa_lojas_pgto = dict(zip(df['filial'], df['loja']))
     dados_pagamentos = {fid: {} for fid in mapa_lojas_pgto.keys()}
     
-    agrupado = df.groupby(['filial', 'forma_pagamento'])['total_liquido'].sum().reset_index()
+    agrupado = df.groupby(['filial', 'forma_pagamento'])['valor_liquido_real'].sum().reset_index()
     
     for _, r in agrupado.iterrows():
-        if r['total_liquido'] > 0:
-            dados_pagamentos[r['filial']][r['forma_pagamento']] = float(r['total_liquido'])
+        if r['valor_liquido_real'] > 0:
+            dados_pagamentos[r['filial']][r['forma_pagamento']] = float(r['valor_liquido_real'])
 
     return dados_pagamentos, mapa_lojas_pgto
 
@@ -560,26 +560,26 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
             query = """
-                SELECT filial, loja, data_venda, forma_pagamento, total_liquido 
-                FROM vw_venda_por_pagamento_real 
+                SELECT filial, loja, data_venda, forma_pagamento, valor_liquido_real 
+                FROM vw_vendas_por_pagamento 
                 WHERE data_venda >= ? AND data_venda <= ?
             """
             df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
             conn.close()
         except Exception as e:
             print(f"Erro no Banco Local (Pagamentos Diários): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'forma_pagamento', 'total_liquido'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'forma_pagamento', 'valor_liquido_real'])
     else:
         try:
-            r = supabase.table("vw_venda_por_pagamento_real") \
-                .select("filial, loja, data_venda, forma_pagamento, total_liquido") \
+            r = supabase.table("vw_vendas_por_pagamento") \
+                .select("filial, loja, data_venda, forma_pagamento, valor_liquido_real") \
                 .gte("data_venda", data_inicio) \
                 .lte("data_venda", data_fim) \
                 .execute()
             df = pd.DataFrame(r.data)
         except Exception as e:
             print(f"Erro no Supabase (Pagamentos Diários): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'forma_pagamento', 'total_liquido'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'forma_pagamento', 'valor_liquido_real'])
 
     if df.empty:
         return {}, {}
@@ -587,10 +587,9 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
     df['filial'] = df['filial'].astype(str).str.strip()
     df['loja'] = df['loja'].astype(str).str.strip().str.upper()
     df['forma_pagamento'] = df['forma_pagamento'].fillna('NÃO INFORMADO').astype(str).str.strip().str.upper()
-    df['total_liquido'] = pd.to_numeric(df['total_liquido'], errors='coerce').fillna(0.0)
+    df['valor_liquido_real'] = pd.to_numeric(df['valor_liquido_real'], errors='coerce').fillna(0.0)
 
     mapa_lojas_pgto = dict(zip(df['filial'], df['loja']))
-
     df['dia'] = pd.to_datetime(df['data_venda']).dt.strftime('%d')
 
     dados_diarios = {}
@@ -598,14 +597,13 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
         dia_str = f"{d:02d}"
         dados_diarios[dia_str] = {fid: {} for fid in mapa_lojas_pgto.keys()}
 
-    agrupado = df.groupby(['dia', 'filial', 'forma_pagamento'])['total_liquido'].sum().reset_index()
+    agrupado = df.groupby(['dia', 'filial', 'forma_pagamento'])['valor_liquido_real'].sum().reset_index()
 
     for _, r in agrupado.iterrows():
-        if r['total_liquido'] > 0:
-            dados_diarios[r['dia']][r['filial']][r['forma_pagamento']] = float(r['total_liquido'])
+        if r['valor_liquido_real'] > 0:
+            dados_diarios[r['dia']][r['filial']][r['forma_pagamento']] = float(r['valor_liquido_real'])
 
     return dados_diarios, mapa_lojas_pgto
-
 
 # =========================================================================================
 # NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE
