@@ -1,4 +1,5 @@
 import os
+from supabase import create_client
 
 EMPRESA = {
     "nome_filial": "Drogaria Portugal",
@@ -8,6 +9,8 @@ EMPRESA = {
 
 SUPABASE_URL = "https://qfzhcbywfwmorrgkcfvu.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmemhjYnl3Zndtb3JyZ2tjZnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODY0ODUsImV4cCI6MjA5NjE2MjQ4NX0.BcAzvdYapgb990OxBCzp5vREObefqIZsNpZomwtb2JE"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Descobre automaticamente se está no Render (Render sempre tem a variável 'RENDER' configurada internamente)
 if "RENDER" in os.environ:
