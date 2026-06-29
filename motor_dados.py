@@ -4,6 +4,7 @@ import calendar
 import pandas as pd
 import sqlite3
 import os
+from functools import lru_cache
 import config
 
 # =========================================================================================
@@ -34,7 +35,7 @@ def conectar_sqlite_seguro(caminho):
     cursor.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
-
+@lru_cache(maxsize=10)
 def obter_dados_dashboard_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -43,6 +44,9 @@ def obter_dados_dashboard_fast(mes, ano):
     data_inicio = f"{ano}-{mes:02d}-01"
     data_fim = f"{ano}-{mes:02d}-{quant_dias:02d}"
 
+    # =========================================================================
+    # AMBIENTE 1: LOCAL (Lida com SQLite sem fuso horário)
+    # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
@@ -65,16 +69,28 @@ def obter_dados_dashboard_fast(mes, ano):
                 df_compras['data_compra'] = df_compras['data_emissao'].str[:10]
             else:
                 df_compras = pd.DataFrame(columns=['data_compra', 'filial', 'loja', 'valor_total'])
+
+            # LÓGICA LOCAL: Usa Pandas tolerante a formatos de data mistos (DD/MM vs YYYY-MM)
+            if not df_vendas.empty:
+                df_vendas['dia'] = pd.to_datetime(df_vendas['data_venda'], format='mixed', dayfirst=True).dt.day
+            if not df_compras.empty:
+                df_compras['dia'] = pd.to_datetime(df_compras['data_compra'], format='mixed', dayfirst=True).dt.day
+
         except Exception as e:
             print(f"Erro no Banco Local: {e}")
             df_vendas = pd.DataFrame(columns=['data_venda', 'filial', 'loja', 'venda_venda_real'])
             df_compras = pd.DataFrame(columns=['data_compra', 'filial', 'loja', 'valor_total'])
+            
+    # =========================================================================
+    # AMBIENTE 2: NUVEM (Lida com Supabase e fuso horário UTC do Render)
+    # =========================================================================
     else:
         try:
             r_vendas = supabase.table("vw_relatorio_venda_venda") \
                 .select("data_venda, filial, loja, venda_venda_real") \
                 .gte("data_venda", data_inicio) \
                 .lte("data_venda", data_fim) \
+                .limit(1000000) \
                 .execute()
             df_vendas = pd.DataFrame(r_vendas.data)
 
@@ -82,6 +98,7 @@ def obter_dados_dashboard_fast(mes, ano):
                 .select("data_emissao, filial, loja, valor_total") \
                 .gte("data_emissao", data_inicio + " 00:00:00") \
                 .lte("data_emissao", data_fim + " 23:59:59") \
+                .limit(1000000) \
                 .execute()
             df_compras = pd.DataFrame(r_compras.data)
             
@@ -89,13 +106,20 @@ def obter_dados_dashboard_fast(mes, ano):
                 df_compras['data_compra'] = df_compras['data_emissao'].str[:10]
             else:
                 df_compras = pd.DataFrame(columns=['data_compra', 'filial', 'loja', 'valor_total'])
+
+            # LÓGICA NUVEM: Slicing de String ISO puro. Foge do timezone UTC do servidor
+            if not df_vendas.empty:
+                df_vendas['dia'] = df_vendas['data_venda'].astype(str).str[8:10].astype(int)
+            if not df_compras.empty:
+                df_compras['dia'] = df_compras['data_compra'].astype(str).str[8:10].astype(int)
+
         except Exception as e:
             print(f"Erro no Supabase: {e}")
             df_vendas = pd.DataFrame(columns=['data_venda', 'filial', 'loja', 'venda_venda_real'])
             df_compras = pd.DataFrame(columns=['data_compra', 'filial', 'loja', 'valor_total'])
 
     # =========================================================================
-    # TRATAMENTO DE DADOS (Comum aos dois ambientes)
+    # PROCESSAMENTO UNIFICADO (Totalmente agnóstico ao banco de dados)
     # =========================================================================
     mapa_lojas = {}
     
@@ -139,7 +163,6 @@ def obter_dados_dashboard_fast(mes, ano):
         dados_tabela.append(linha)
 
     if not df_vendas.empty:
-        df_vendas['dia'] = pd.to_datetime(df_vendas['data_venda']).dt.day
         agrupado_v = df_vendas.groupby(['dia', 'filial'])['venda_venda_real'].sum().reset_index()
         for _, r in agrupado_v.iterrows():
             idx = int(r['dia']) - 1
@@ -148,7 +171,6 @@ def obter_dados_dashboard_fast(mes, ano):
                 dados_tabela[idx][f"vend_{fid}"] = float(r['venda_venda_real'])
 
     if not df_compras.empty:
-        df_compras['dia'] = pd.to_datetime(df_compras['data_compra']).dt.day
         agrupado_c = df_compras.groupby(['dia', 'filial'])['valor_total'].sum().reset_index()
         for _, r in agrupado_c.iterrows():
             idx = int(r['dia']) - 1
@@ -165,14 +187,16 @@ def obter_dados_dashboard_fast(mes, ano):
 
     return dados_tabela, totais, mapa_lojas, quant_dias
 
-
-
+@lru_cache(maxsize=10)
 def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
     import pandas as pd
 
     data_inicio_ano = f"{ano_selecionado}-01-01"
     data_fim_ano = f"{ano_selecionado}-12-31"
 
+    # =========================================================================
+    # AMBIENTE 1: LOCAL
+    # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
@@ -183,9 +207,18 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
             """
             df = pd.read_sql(query, conn, params=(data_inicio_ano, data_fim_ano))
             conn.close()
+
+            # LÓGICA LOCAL
+            if not df.empty:
+                df['mes'] = pd.to_datetime(df['data_entrega'], format='mixed', dayfirst=True).dt.month
+
         except Exception as e:
             print(f"Erro no Banco Local (Entregas): {e}")
             df = pd.DataFrame(columns=['filial', 'loja', 'motoboy', 'data_entrega'])
+            
+    # =========================================================================
+    # AMBIENTE 2: NUVEM
+    # =========================================================================
     else:
         try:
             r = supabase.table("vw_logistica_entregas") \
@@ -196,10 +229,19 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
                 .limit(1000000) \
                 .execute()
             df = pd.DataFrame(r.data)
+
+            # LÓGICA NUVEM
+            if not df.empty:
+                df['data_entrega_str'] = df['data_entrega'].astype(str).str[:10]
+                df['mes'] = df['data_entrega_str'].str[5:7].astype(int)
+
         except Exception as e:
             print(f"Erro no Supabase (Entregas): {e}")
             df = pd.DataFrame(columns=['filial', 'loja', 'motoboy', 'data_entrega'])
 
+    # =========================================================================
+    # PROCESSAMENTO UNIFICADO
+    # =========================================================================
     if df.empty:
         return 0, {}, [], {}, {}, {}
 
@@ -208,9 +250,6 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
     df['motoboy'] = df['motoboy'].astype(str).str.strip().str.upper()
 
     mapa_lojas = dict(zip(df['filial'], df['loja']))
-
-    df['data_entrega_str'] = df['data_entrega'].astype(str).str[:10]
-    df['mes'] = df['data_entrega_str'].str[5:7].astype(int)
 
     df_mes = df[df['mes'] == mes_selecionado]
 
@@ -237,7 +276,7 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
 
     return tot_entregas, dict_filiais, ranking, evo_lojas, evo_mbs, mapa_lojas
 
-
+@lru_cache(maxsize=10)
 def obter_dados_vendedores_fast(mes, ano):
     import pandas as pd
 
@@ -313,7 +352,7 @@ def obter_dados_vendedores_fast(mes, ano):
 
     return resumo_mes_vendedores, evolucao_vendedores, mapa_vendedores
 
-
+@lru_cache(maxsize=10)
 def obter_dados_picos_horario_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -322,37 +361,59 @@ def obter_dados_picos_horario_fast(mes, ano):
     data_inicio = f"{ano}-{mes:02d}-01"
     data_fim = f"{ano}-{mes:02d}-{quant_dias:02d}"
 
+    # =========================================================================
+    # AMBIENTE 1: LOCAL
+    # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
+            # CORREÇÃO: Coluna data_venda adicionada no SELECT!
             query = """
-                SELECT filial, loja, dia_semana, hora_venda, qtd_atendimentos 
+                SELECT filial, loja, data_venda, dia_semana, hora_venda, qtd_atendimentos 
                 FROM vw_vendas_por_hora 
                 WHERE data_venda >= ? AND data_venda <= ?
             """
             df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
             conn.close()
+
+            # LÓGICA LOCAL: Usa o to_datetime tolerante a formatos mistos do SQLite
+            if not df.empty:
+                df['mes_int'] = pd.to_datetime(df['data_venda'], format='mixed', dayfirst=True).dt.month
+
         except Exception as e:
             print(f"Erro no Banco Local (Picos Horario): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
+            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
+            
+    # =========================================================================
+    # AMBIENTE 2: NUVEM
+    # =========================================================================
     else:
         try:
+            data_inicio_ano = f"{ano}-01-01"
+            data_fim_ano = f"{ano}-12-31"
+
             r = supabase.table("vw_vendas_por_hora") \
                 .select("filial, loja, data_venda, dia_semana, hora_venda, qtd_atendimentos") \
-                .gte("data_venda", data_inicio) \
-                .lte("data_venda", data_fim) \
+                .gte("data_venda", data_inicio_ano) \
+                .lte("data_venda", data_fim_ano) \
                 .limit(1000000) \
                 .execute()
             df = pd.DataFrame(r.data)
+
+            # LÓGICA NUVEM: Corte direto de string contra o fuso horário UTC
+            if not df.empty:
+                df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
+                df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
+
         except Exception as e:
             print(f"Erro no Supabase (Picos Horario): {e}")
             df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
 
+    # =========================================================================
+    # PROCESSAMENTO UNIFICADO
+    # =========================================================================
     if df.empty:
         return {}, [], {}, []
-
-    df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
-    df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
 
     df['filial'] = df['filial'].astype(str).str.strip()
     df['loja'] = df['loja'].astype(str).str.strip().str.upper()
@@ -388,6 +449,7 @@ def obter_dados_picos_horario_fast(mes, ano):
     return dados_picos, tempos_unicos, mapa_lojas, dias_semana_ordenados
 
 
+@lru_cache(maxsize=10)
 def obter_dados_vendas_classificacao_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -396,6 +458,9 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
     data_inicio = f"{ano}-{mes:02d}-01"
     data_fim = f"{ano}-{mes:02d}-{quant_dias:02d}"
 
+    # =========================================================================
+    # AMBIENTE 1: LOCAL
+    # =========================================================================
     if config.AMBIENTE_ATUAL == "LOCAL":
         try:
             conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
@@ -406,21 +471,39 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
             """
             df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
             conn.close()
+            
+            # LÓGICA LOCAL
+            if not df.empty:
+                df['mes_int'] = pd.to_datetime(df['data_venda'], format='mixed', dayfirst=True).dt.month
+
         except Exception as e:
             print(f"Erro no Banco Local (Categorias): {e}")
             df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'categoria_macro', 'valor_total_vendido'])
+            
+    # =========================================================================
+    # AMBIENTE 2: NUVEM
+    # =========================================================================
     else:
         try:
             r = supabase.table("vw_vendas_por_categoria") \
                 .select("filial, loja, data_venda, categoria_macro, valor_total_vendido") \
                 .gte("data_venda", data_inicio) \
                 .lte("data_venda", data_fim) \
+                .limit(1000000) \
                 .execute()
             df = pd.DataFrame(r.data)
+
+            # LÓGICA NUVEM
+            if not df.empty:
+                df['mes_int'] = df['data_venda'].astype(str).str[5:7].astype(int)
+
         except Exception as e:
             print(f"Erro no Supabase (Categorias): {e}")
             df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'categoria_macro', 'valor_total_vendido'])
 
+    # =========================================================================
+    # PROCESSAMENTO UNIFICADO
+    # =========================================================================
     if df.empty:
         return {}, {}, {}
 
@@ -431,8 +514,7 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
 
     mapa_lojas_class = dict(zip(df['filial'], df['loja']))
 
-    df['data_venda'] = pd.to_datetime(df['data_venda'])
-    df_mes = df[df['data_venda'].dt.month == mes]
+    df_mes = df[df['mes_int'] == mes]
 
     totais_loja = {}
     detalhe_classificacao = {}
@@ -455,8 +537,7 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
 
     return totais_loja, detalhe_classificacao, mapa_lojas_class
 
-
-
+@lru_cache(maxsize=10)
 def obter_dados_compras_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -510,7 +591,7 @@ def obter_dados_compras_fast(mes, ano):
 
 
 
-
+@lru_cache(maxsize=10)
 def obter_dados_pagamentos_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -564,7 +645,7 @@ def obter_dados_pagamentos_fast(mes, ano):
     return dados_pagamentos, mapa_lojas_pgto
 
 
-
+@lru_cache(maxsize=10)
 def obter_dados_pagamentos_diarios_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -625,6 +706,7 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
 # =========================================================================================
 # NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE
 # =========================================================================================
+@lru_cache(maxsize=10)
 def obter_resumo_rapido_fast(modo, data_iso):
     """
     Extrai apenas os dados do dia ou do mês exato para a tela de Resumo Mobile.
