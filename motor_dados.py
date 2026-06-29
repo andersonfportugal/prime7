@@ -166,6 +166,7 @@ def obter_dados_dashboard_fast(mes, ano):
     return dados_tabela, totais, mapa_lojas, quant_dias
 
 
+
 def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
     import pandas as pd
 
@@ -192,6 +193,7 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
                 .gte("data_entrega", data_inicio_ano) \
                 .lte("data_entrega", data_fim_ano) \
                 .eq("status_entrega", "F") \
+                .limit(1000000) \
                 .execute()
             df = pd.DataFrame(r.data)
         except Exception as e:
@@ -207,14 +209,9 @@ def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
 
     mapa_lojas = dict(zip(df['filial'], df['loja']))
 
-    # CORREÇÃO CIRÚRGICA PARA O RENDER: Garante que a data vire string limpa no formato YYYY-MM-DD
-    # Evita que o fuso horário UTC do Render altere o dia/mês do registro.
     df['data_entrega_str'] = df['data_entrega'].astype(str).str[:10]
-    
-    # Extrai o mês cortando os caracteres da string diretamente (Ex: '2026-06-29' -> '06' -> 6)
     df['mes'] = df['data_entrega_str'].str[5:7].astype(int)
 
-    # Filtra o mês selecionado usando o índice imutável da string
     df_mes = df[df['mes'] == mes_selecionado]
 
     tot_entregas = len(df_mes)
@@ -259,7 +256,6 @@ def obter_dados_vendedores_fast(mes, ano):
             df = pd.DataFrame(columns=['data_venda', 'id_vendedor', 'vendedor', 'participacao_em_vendas', 'valor_total_vendido'])
     else:
         try:
-            # Filtra o ano completo direto na API do Supabase de forma otimizada
             data_inicio_ano = f"{ano}-01-01"
             data_fim_ano = f"{ano}-12-31"
 
@@ -267,6 +263,7 @@ def obter_dados_vendedores_fast(mes, ano):
                 .select("data_venda, id_vendedor, vendedor, participacao_em_vendas, valor_total_vendido") \
                 .gte("data_venda", data_inicio_ano) \
                 .lte("data_venda", data_fim_ano) \
+                .limit(1000000) \
                 .execute()
             df = pd.DataFrame(r.data)
         except Exception as e:
@@ -276,11 +273,7 @@ def obter_dados_vendedores_fast(mes, ano):
     if df.empty:
         return {}, {}, {}
 
-    # CORREÇÃO CRÍTICA PARA O RENDER (Ignora o fuso horário UTC do Linux)
-    # Forçamos a coluna a virar string e pegamos os 10 primeiros caracteres (YYYY-MM-DD)
     df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
-    
-    # Cortamos direto a string para descobrir o mês de forma imutável (Ex: '2026-06-29' -> '06' -> 6)
     df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
     
     df['id_vendedor'] = df['id_vendedor'].astype(str).str.strip()
@@ -294,7 +287,6 @@ def obter_dados_vendedores_fast(mes, ano):
 
     lista_vend_ids = sorted(list(mapa_vendedores.keys()))
 
-    # Agora a filtragem por mês vai bater exatamente com o que está escrito no banco
     df_mes = df[df['mes_int'] == mes]
     resumo_mes_vendedores = {}
     
@@ -320,6 +312,81 @@ def obter_dados_vendedores_fast(mes, ano):
                 evolucao_vendedores[vid][m_idx] = float(r['valor_total_vendido'])
 
     return resumo_mes_vendedores, evolucao_vendedores, mapa_vendedores
+
+
+def obter_dados_picos_horario_fast(mes, ano):
+    import pandas as pd
+    import calendar
+
+    _, quant_dias = calendar.monthrange(ano, mes)
+    data_inicio = f"{ano}-{mes:02d}-01"
+    data_fim = f"{ano}-{mes:02d}-{quant_dias:02d}"
+
+    if config.AMBIENTE_ATUAL == "LOCAL":
+        try:
+            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
+            query = """
+                SELECT filial, loja, dia_semana, hora_venda, qtd_atendimentos 
+                FROM vw_vendas_por_hora 
+                WHERE data_venda >= ? AND data_venda <= ?
+            """
+            df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
+            conn.close()
+        except Exception as e:
+            print(f"Erro no Banco Local (Picos Horario): {e}")
+            df = pd.DataFrame(columns=['filial', 'loja', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
+    else:
+        try:
+            r = supabase.table("vw_vendas_por_hora") \
+                .select("filial, loja, data_venda, dia_semana, hora_venda, qtd_atendimentos") \
+                .gte("data_venda", data_inicio) \
+                .lte("data_venda", data_fim) \
+                .limit(1000000) \
+                .execute()
+            df = pd.DataFrame(r.data)
+        except Exception as e:
+            print(f"Erro no Supabase (Picos Horario): {e}")
+            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
+
+    if df.empty:
+        return {}, [], {}, []
+
+    df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
+    df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
+
+    df['filial'] = df['filial'].astype(str).str.strip()
+    df['loja'] = df['loja'].astype(str).str.strip().str.upper()
+    df['dia_semana'] = df['dia_semana'].astype(str).str.strip()
+    df['qtd_atendimentos'] = pd.to_numeric(df['qtd_atendimentos'], errors='coerce').fillna(0)
+    df['hora_venda'] = df['hora_venda'].astype(str).str[:2] + 'h'
+
+    mapa_lojas = dict(zip(df['filial'], df['loja']))
+    lista_ids = sorted(list(mapa_lojas.keys()))
+
+    df_mes = df[df['mes_int'] == mes]
+
+    if df_mes.empty:
+        return {}, [], mapa_lojas, []
+
+    agrupado = df_mes.groupby(['filial', 'dia_semana', 'hora_venda'])['qtd_atendimentos'].sum().reset_index()
+
+    tempos_unicos = sorted(agrupado['hora_venda'].unique().tolist())
+    
+    ordem_dias_padrao = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
+    dias_banco = agrupado['dia_semana'].unique().tolist()
+    dias_semana_ordenados = [d for d in ordem_dias_padrao if d in dias_banco]
+    
+    for d in dias_banco:
+        if d not in dias_semana_ordenados:
+            dias_semana_ordenados.append(d)
+
+    dados_picos = {fid: {dia: {t: 0 for t in tempos_unicos} for dia in dias_semana_ordenados} for fid in lista_ids}
+
+    for _, row in agrupado.iterrows():
+        dados_picos[row['filial']][row['dia_semana']][row['hora_venda']] = int(row['qtd_atendimentos'])
+
+    return dados_picos, tempos_unicos, mapa_lojas, dias_semana_ordenados
+
 
 def obter_dados_vendas_classificacao_fast(mes, ano):
     import pandas as pd
@@ -389,88 +456,6 @@ def obter_dados_vendas_classificacao_fast(mes, ano):
     return totais_loja, detalhe_classificacao, mapa_lojas_class
 
 
-def obter_dados_picos_horario_fast(mes, ano):
-    import pandas as pd
-    import calendar
-
-    _, quant_dias = calendar.monthrange(ano, mes)
-    data_inicio = f"{ano}-{mes:02d}-01"
-    data_fim = f"{ano}-{mes:02d}-{quant_dias:02d}"
-
-    if config.AMBIENTE_ATUAL == "LOCAL":
-        try:
-            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
-            query = """
-                SELECT filial, loja, dia_semana, hora_venda, qtd_atendimentos 
-                FROM vw_vendas_por_hora 
-                WHERE data_venda >= ? AND data_venda <= ?
-            """
-            df = pd.read_sql(query, conn, params=(data_inicio, data_fim))
-            conn.close()
-        except Exception as e:
-            print(f"Erro no Banco Local (Picos Horario): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
-    else:
-        try:
-            # Puxa o ano inteiro ou os limites corretos da nuvem
-            data_inicio_ano = f"{ano}-01-01"
-            data_fim_ano = f"{ano}-12-31"
-
-            r = supabase.table("vw_vendas_por_hora") \
-                .select("filial, loja, data_venda, dia_semana, hora_venda, qtd_atendimentos") \
-                .gte("data_venda", data_inicio_ano) \
-                .lte("data_venda", data_fim_ano) \
-                .execute()
-            df = pd.DataFrame(r.data)
-        except Exception as e:
-            print(f"Erro no Supabase (Picos Horario): {e}")
-            df = pd.DataFrame(columns=['filial', 'loja', 'data_venda', 'dia_semana', 'hora_venda', 'qtd_atendimentos'])
-
-    if df.empty:
-        return {}, [], {}, []
-
-    # CORREÇÃO DO FUSO HORÁRIO NO RENDER: Corta o mês direto do texto YYYY-MM-DD
-    df['data_venda_str'] = df['data_venda'].astype(str).str[:10]
-    df['mes_int'] = df['data_venda_str'].str[5:7].astype(int)
-
-    df['filial'] = df['filial'].astype(str).str.strip()
-    df['loja'] = df['loja'].astype(str).str.strip().str.upper()
-    df['dia_semana'] = df['dia_semana'].astype(str).str.strip()
-    
-    # Garante que a coluna de atendimentos seja numérica pura
-    df['qtd_atendimentos'] = pd.to_numeric(df['qtd_atendimentos'], errors='coerce').fillna(0)
-
-    # Formata a hora adicionando o 'h' (Ex: '14:00' -> '14h')
-    df['hora_venda'] = df['hora_venda'].astype(str).str[:2] + 'h'
-
-    mapa_lojas = dict(zip(df['filial'], df['loja']))
-    lista_ids = sorted(list(mapa_lojas.keys()))
-
-    # Filtra o mês selecionado usando a nossa coluna de string blindada
-    df_mes = df[df['mes_int'] == mes]
-
-    if df_mes.empty:
-        return {}, [], mapa_lojas, []
-
-    agrupado = df_mes.groupby(['filial', 'dia_semana', 'hora_venda'])['qtd_atendimentos'].sum().reset_index()
-
-    tempos_unicos = sorted(agrupado['hora_venda'].unique().tolist())
-    
-    ordem_dias_padrao = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
-    dias_banco = agrupado['dia_semana'].unique().tolist()
-    dias_semana_ordenados = [d for d in ordem_dias_padrao if d in dias_banco]
-    
-    for d in dias_banco:
-        if d not in dias_semana_ordenados:
-            dias_semana_ordenados.append(d)
-
-    dados_picos = {fid: {dia: {t: 0 for t in tempos_unicos} for dia in dias_semana_ordenados} for fid in lista_ids}
-
-    for _, row in agrupado.iterrows():
-        dados_picos[row['filial']][row['dia_semana']][row['hora_venda']] = int(row['qtd_atendimentos'])
-
-    return dados_picos, tempos_unicos, mapa_lojas, dias_semana_ordenados
-
 
 def obter_dados_compras_fast(mes, ano):
     import pandas as pd
@@ -524,6 +509,8 @@ def obter_dados_compras_fast(mes, ano):
     return df.to_dict('records')
 
 
+
+
 def obter_dados_pagamentos_fast(mes, ano):
     import pandas as pd
     import calendar
@@ -575,6 +562,7 @@ def obter_dados_pagamentos_fast(mes, ano):
             dados_pagamentos[r['filial']][r['forma_pagamento']] = float(r['valor_liquido_real'])
 
     return dados_pagamentos, mapa_lojas_pgto
+
 
 
 def obter_dados_pagamentos_diarios_fast(mes, ano):
