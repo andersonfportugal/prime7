@@ -5,6 +5,12 @@ from supabase import create_client, Client
 import config
 import tema
 
+from motor_dados import (
+    obter_dados_dashboard_fast, obter_dados_entregas_fast, 
+    obter_dados_vendedores_fast, obter_dados_vendas_classificacao_fast,
+    obter_dados_picos_horario_fast, obter_dados_pagamentos_fast
+)
+
 # =============================================================================
 # 1. VARIÁVEIS GLOBAIS E GESTÃO DE SESSÃO
 # =============================================================================
@@ -197,6 +203,22 @@ def painel_principal():
     # --- CONTAINER CENTRAL ---
     container_principal = ui.column().classes("w-full max-w-[1600px] mx-auto p-4 mt-2")
     sessoes_ativas[cliente_id]["container"] = container_principal
+
+    # --- A MÁGICA DO PRÉ-CARREGAMENTO ---
+    def pre_carregar_tudo():
+        mes = app.storage.user.get("mes")
+        ano = app.storage.user.get("ano")
+        # Ao chamar estas funções, o @lru_cache já salva o resultado na RAM
+        obter_dados_entregas_fast(mes, ano)
+        obter_dados_vendedores_fast(mes, ano)
+        obter_dados_vendas_classificacao_fast(mes, ano)
+        obter_dados_picos_horario_fast(mes, ano)
+        obter_dados_pagamentos_fast(mes, ano)
+        # O Dashboard já foi carregado pela função que desenha a tela, 
+        # então não precisa pre-carregar ele aqui.
+
+    # Dispara o carregamento em background 1.5s após a tela abrir
+    ui.timer(1.5, pre_carregar_tudo, once=True)
 
     with container_principal:
         aba = app.storage.user.get("aba_atual", "dashboard")
