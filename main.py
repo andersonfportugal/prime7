@@ -8,7 +8,7 @@ import tema
 from motor_dados import (
     obter_dados_dashboard_fast, obter_dados_entregas_fast, 
     obter_dados_vendedores_fast, obter_dados_vendas_classificacao_fast,
-    obter_dados_picos_horario_fast, obter_dados_pagamentos_fast
+    obter_dados_picos_horario_fast, obter_dados_pagamentos_fast, limpar_caches_dados
 )
 
 # =============================================================================
@@ -203,6 +203,8 @@ def painel_principal():
     # --- CONTAINER CENTRAL ---
     container_principal = ui.column().classes("w-full max-w-[1600px] mx-auto p-4 mt-2")
     sessoes_ativas[cliente_id]["container"] = container_principal
+
+    limpar_caches_dados()
 
     # --- A MÁGICA DO PRÉ-CARREGAMENTO ---
     def pre_carregar_tudo():

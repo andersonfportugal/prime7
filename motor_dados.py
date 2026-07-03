@@ -35,93 +35,75 @@ def conectar_sqlite_seguro(caminho):
     cursor.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
-@lru_cache(maxsize=10)
+# =========================================================================================
+# CONTROLE DE CACHE (LIMPEZA PARA ATUALIZAÇÃO EM TEMPO REAL)
+# =========================================================================================
+def limpar_caches_dados():
+    """Limpa a memória do lru_cache para forçar uma nova busca no Supabase"""
+    obter_dados_dashboard_fast.cache_clear()
+    obter_dados_entregas_fast.cache_clear()
+    obter_dados_vendedores_fast.cache_clear()
+    obter_dados_vendas_classificacao_fast.cache_clear()
+    obter_dados_compras_fast.cache_clear()
+    obter_dados_picos_horario_fast.cache_clear()
+    obter_dados_pagamentos_fast.cache_clear()
+    obter_dados_pagamentos_diarios_fast.cache_clear()
+    obter_resumo_rapido_fast.cache_clear()
+
+#@lru_cache(maxsize=10)
 def obter_dados_dashboard_fast(mes, ano):
-    import pandas as pd
     import calendar
-    
     _, quant_dias = calendar.monthrange(ano, mes)
 
-    # =========================================================================
-    # CONSULTA DIRETA AO SUPABASE (Tanto para Local quanto Render)
-    # =========================================================================
+    # 1. Busca os dados brutos (deixa os dados como lista de dicionários nativa do Supabase)
     try:
         r_vendas = supabase.rpc("get_vendas_diarias", {"p_mes": mes, "p_ano": ano}).execute()
-        df_vendas = pd.DataFrame(r_vendas.data)
-
+        vendas = r_vendas.data # Já vem como lista de dicionários
+        
         r_compras = supabase.rpc("get_compras_diarias", {"p_mes": mes, "p_ano": ano}).execute()
-        df_compras = pd.DataFrame(r_compras.data)
-
+        compras = r_compras.data
     except Exception as e:
-        print(f"Erro no Supabase (Dashboard): {e}")
-        df_vendas = pd.DataFrame(columns=['dia', 'filial', 'loja', 'venda_venda_real'])
-        df_compras = pd.DataFrame(columns=['dia', 'filial', 'loja', 'valor_total'])
+        print(f"Erro no Supabase: {e}")
+        return [], {}, {}, quant_dias
 
-    # =========================================================================
-    # TRATAMENTO DE DADOS
-    # =========================================================================
+    # 2. Mapeamento de Lojas (Loop simples)
     mapa_lojas = {}
-    
-    if not df_vendas.empty:
-        for _, r in df_vendas[['filial', 'loja']].drop_duplicates().iterrows():
-            mapa_lojas[str(r['filial'])] = str(r['loja']).strip().upper()
-            
-    if not df_compras.empty:
-        for _, r in df_compras[['filial', 'loja']].drop_duplicates().iterrows():
-            mapa_lojas[str(r['filial'])] = str(r['loja']).strip().upper()
-
+    for r in vendas + compras:
+        mapa_lojas[str(r['filial'])] = str(r['loja']).strip().upper()
     lista_ids = sorted(list(mapa_lojas.keys()))
 
-    totais = {}
-    for fid in lista_ids:
-        totais[f"vend_{fid}"] = 0.0
-        totais[f"bol_{fid}"] = 0.0
-        totais[f"comp_{fid}"] = 0.0
-        totais[f"desp_{fid}"] = 0.0
+    # 3. Cálculo de totais (Dicionário de soma rápida)
+    totais = {f"{pref}_{fid}": 0.0 for fid in lista_ids for pref in ["vend", "bol", "comp", "desp"]}
+    for r in vendas:
+        totais[f"vend_{r['filial']}"] += float(r['venda_venda_real'] or 0)
+    for r in compras:
+        totais[f"comp_{r['filial']}"] += float(r['valor_total'] or 0)
 
-    if not df_vendas.empty:
-        t_vendas = df_vendas.groupby('filial')['venda_venda_real'].sum().to_dict()
-        for fid, val in t_vendas.items():
-            totais[f"vend_{fid}"] = float(val)
-
-    if not df_compras.empty:
-        t_compras = df_compras.groupby('filial')['valor_total'].sum().to_dict()
-        for fid, val in t_compras.items():
-            totais[f"comp_{fid}"] = float(val)
-
+    # 4. Montagem da tabela (Matriz simples)
     dados_tabela = []
-    for dia in range(1, quant_dias + 1):
-        linha = {"dia": f"{dia:02d}"}
+    for d in range(1, quant_dias + 1):
+        dia_str = f"{d:02d}"
+        linha = {"dia": dia_str}
         for fid in lista_ids:
-            linha[f"vend_{fid}"] = 0.0
-            linha[f"bol_{fid}"] = 0.0
-            linha[f"comp_{fid}"] = 0.0
-            linha[f"desp_{fid}"] = 0.0
+            linha.update({f"vend_{fid}": 0.0, f"bol_{fid}": 0.0, f"comp_{fid}": 0.0, f"desp_{fid}": 0.0})
         dados_tabela.append(linha)
 
-    if not df_vendas.empty:
-        for _, r in df_vendas.iterrows():
-            idx = int(r['dia']) - 1
-            fid = str(r['filial'])
-            if f"vend_{fid}" in dados_tabela[idx]:
-                dados_tabela[idx][f"vend_{fid}"] += float(r['venda_venda_real'])
+    # 5. Preenchimento (Sem groupby, direto no índice da lista)
+    for r in vendas:
+        idx = int(r['dia']) - 1
+        dados_tabela[idx][f"vend_{r['filial']}"] += float(r['venda_venda_real'] or 0)
+    
+    for r in compras:
+        idx = int(r['dia']) - 1
+        dados_tabela[idx][f"comp_{r['filial']}"] += float(r['valor_total'] or 0)
 
-    if not df_compras.empty:
-        for _, r in df_compras.iterrows():
-            idx = int(r['dia']) - 1
-            fid = str(r['filial'])
-            if f"comp_{fid}" in dados_tabela[idx]:
-                dados_tabela[idx][f"comp_{fid}"] += float(r['valor_total'])
-
+    # 6. Formatação final (Só no finalzinho)
     for linha in dados_tabela:
-        for fid in lista_ids:
-            linha[f"vend_{fid}"] = formatar_moeda_brasil(linha[f"vend_{fid}"])
-            linha[f"bol_{fid}"] = formatar_moeda_brasil(linha[f"bol_{fid}"])
-            linha[f"comp_{fid}"] = formatar_moeda_brasil(linha[f"comp_{fid}"])
-            linha[f"desp_{fid}"] = formatar_moeda_brasil(linha[f"desp_{fid}"])
+        for key, val in linha.items():
+            if key != "dia":
+                linha[key] = formatar_moeda_brasil(val)
 
     return dados_tabela, totais, mapa_lojas, quant_dias
-
 
 @lru_cache(maxsize=10)
 def obter_dados_entregas_fast(mes_selecionado, ano_selecionado):
