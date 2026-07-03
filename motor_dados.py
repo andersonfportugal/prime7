@@ -39,18 +39,25 @@ def conectar_sqlite_seguro(caminho):
 # CONTROLE DE CACHE (LIMPEZA PARA ATUALIZAÇÃO EM TEMPO REAL)
 # =========================================================================================
 def limpar_caches_dados():
-    """Limpa a memória do lru_cache para forçar uma nova busca no Supabase"""
-    obter_dados_dashboard_fast.cache_clear()
-    obter_dados_entregas_fast.cache_clear()
-    obter_dados_vendedores_fast.cache_clear()
-    obter_dados_vendas_classificacao_fast.cache_clear()
-    obter_dados_compras_fast.cache_clear()
-    obter_dados_picos_horario_fast.cache_clear()
-    obter_dados_pagamentos_fast.cache_clear()
-    obter_dados_pagamentos_diarios_fast.cache_clear()
-    obter_resumo_rapido_fast.cache_clear()
+    """Limpa a memória do lru_cache apenas das funções que possuem cache ativado"""
+    funcoes = [
+        obter_dados_dashboard_fast,
+        obter_dados_entregas_fast,
+        obter_dados_vendedores_fast,
+        obter_dados_vendas_classificacao_fast,
+        obter_dados_compras_fast,
+        obter_dados_picos_horario_fast,
+        obter_dados_pagamentos_fast,
+        obter_dados_pagamentos_diarios_fast,
+        obter_resumo_rapido_fast
+    ]
+    
+    for func in funcoes:
+        # Só limpa se a função tiver a habilidade (atributo) de ser limpa
+        if hasattr(func, 'cache_clear'):
+            func.cache_clear()
 
-#@lru_cache(maxsize=10)
+@lru_cache(maxsize=10)
 def obter_dados_dashboard_fast(mes, ano):
     import calendar
     _, quant_dias = calendar.monthrange(ano, mes)
