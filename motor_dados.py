@@ -350,6 +350,39 @@ def obter_dados_pagamentos_diarios_fast(mes, ano):
 
     return dados_diarios, mapa_lojas_pgto
 
+
+@lru_cache(maxsize=10)
+def buscar_compras_avancado_fast(nf="", fornecedor="", dt_ini="", dt_fim=""):
+    try:
+        # Inicia a base da query
+        query = supabase.table("vw_resumo_notas_fiscais").select("*")
+        
+        # Filtro de NF (Exata)
+        if nf:
+            query = query.eq("numero_nota", nf)
+            
+        # Filtro de Fornecedor (Qualquer parte do nome)
+        if fornecedor:
+            query = query.ilike("fornecedor", f"%{fornecedor}%")
+            
+        # Filtro de Data Inicial (A partir de...)
+        if dt_ini:
+            query = query.gte("data_emissao", dt_ini)
+            
+        # Filtro de Data Final (Até...)
+        if dt_fim:
+            query = query.lte("data_emissao", dt_fim)
+            
+        # Ordena e limita a 50 resultados para manter a velocidade
+        resposta = query.order("data_emissao", desc=True).limit(50).execute()
+        
+        return resposta.data
+        
+    except Exception as e:
+        print(f"Erro na busca avançada com datas no Supabase: {e}")
+        return []
+
+
 # =========================================================================================
 # NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE
 # =========================================================================================
