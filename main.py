@@ -126,7 +126,7 @@ def painel_principal():
                 
                 # Injetamos o 'seletor-centro' nas classes de ambos:
                 sel_mes = ui.select(meses_pt, value=mes_atual, on_change=atualizar_data_global).classes(f"seletor-centro w-16 md:w-20 text-xs md:text-sm font-bold !{cor['texto_principal']}").props(props_dinamicas)
-                sel_ano = ui.select([2024, 2025, 2026], value=ano_atual, on_change=atualizar_data_global).classes(f"seletor-centro w-16 md:w-20 text-xs md:text-sm font-bold !{cor['texto_principal']}").props(props_dinamicas)
+                sel_ano = ui.select([2021, 2022, 2023, 2024, 2025, 2026], value=ano_atual, on_change=atualizar_data_global).classes(f"seletor-centro w-16 md:w-20 text-xs md:text-sm font-bold !{cor['texto_principal']}").props(props_dinamicas)
                 # --- DADOS DO USUÁRIO E TEMAS ---
             nome_usuario = app.storage.user.get("nome", "Usuário")
             ui.label(f"Olá, {nome_usuario}").classes(f"text-sm font-bold {cor['texto_secundario']} hidden lg:block")
