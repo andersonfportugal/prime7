@@ -19,6 +19,9 @@ sessoes_ativas = {}
 
 # A cor foi removida daqui do topo para ser chamada de forma segura dentro da página do utilizador!
 
+app.add_static_files('/static', 'static')
+ui.add_head_html('<link rel="apple-touch-icon" sizes="180x180" href="/static/icon.png">', shared=True)
+
 def limpar_memoria(client):
     if client.id in sessoes_ativas:
         del sessoes_ativas[client.id]

@@ -386,6 +386,15 @@ def buscar_compras_avancado_fast(nf="", fornecedor="", dt_ini="", dt_fim=""):
 # =========================================================================================
 # NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE
 # =========================================================================================
+# =========================================================================================
+# NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE (100% SUPABASE)
+# =========================================================================================
+# =========================================================================================
+# NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE (100% SUPABASE)
+# =========================================================================================
+# =========================================================================================
+# NOVA FUNÇÃO PARA A TELA DE RESUMO MOBILE (100% SUPABASE)
+# =========================================================================================
 @lru_cache(maxsize=10)
 def obter_resumo_rapido_fast(modo, data_iso):
     """
@@ -393,6 +402,7 @@ def obter_resumo_rapido_fast(modo, data_iso):
     modo: 'DIA' ou 'MÊS'
     data_iso: string no formato 'YYYY-MM-DD'
     """
+    import calendar
     data_alvo = datetime.date.fromisoformat(data_iso)
     
     # 1. Definir os limites de data
@@ -409,75 +419,64 @@ def obter_resumo_rapido_fast(modo, data_iso):
     total_entregas = 0
 
     # =========================================================================
-    # CONSULTA: VENDAS
+    # CONSULTA: VENDAS E CUSTO (Via Supabase)
     # =========================================================================
-    if config.AMBIENTE_ATUAL == "LOCAL":
-        try:
-            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
-            query_vendas = """
-                SELECT filial, loja, venda_venda_real 
-                FROM vw_relatorio_venda_venda 
-                WHERE data_venda >= ? AND data_venda <= ?
-            """
-            df_vendas = pd.read_sql(query_vendas, conn, params=(data_inicio, data_fim))
-            conn.close()
-        except Exception as e:
-            print(f"Erro Vendas Local (Resumo): {e}")
-            df_vendas = pd.DataFrame(columns=['filial', 'loja', 'venda_venda_real'])
-    else:
-        try:
-            r_vendas = supabase.table("vw_relatorio_venda_venda") \
-                .select("filial, loja, venda_venda_real") \
-                .gte("data_venda", data_inicio) \
-                .lte("data_venda", data_fim) \
-                .execute()
-            df_vendas = pd.DataFrame(r_vendas.data)
-        except Exception as e:
-            print(f"Erro Vendas Supabase (Resumo): {e}")
-            df_vendas = pd.DataFrame(columns=['filial', 'loja', 'venda_venda_real'])
+    try:
+        r_vendas = supabase.table("vw_relatorio_venda_venda") \
+            .select("filial, loja, venda_venda_real, qtd_cupons_validos, custo_real") \
+            .gte("data_venda", data_inicio) \
+            .lte("data_venda", data_fim) \
+            .execute()
+        df_vendas = pd.DataFrame(r_vendas.data)
+    except Exception as e:
+        print(f"Erro Vendas Supabase (Resumo): {e}")
+        df_vendas = pd.DataFrame(columns=['filial', 'loja', 'venda_venda_real', 'qtd_cupons_validos', 'custo_real'])
 
-    # Processamento Vendas
+    # Processamento Vendas e Custos
     if not df_vendas.empty:
         df_vendas['filial'] = df_vendas['filial'].astype(str).str.strip()
         df_vendas['loja'] = df_vendas['loja'].astype(str).str.strip().str.upper()
         df_vendas['venda_venda_real'] = pd.to_numeric(df_vendas['venda_venda_real'], errors='coerce').fillna(0)
+        df_vendas['qtd_cupons_validos'] = pd.to_numeric(df_vendas['qtd_cupons_validos'], errors='coerce').fillna(0).astype(int)
+        df_vendas['custo_real'] = pd.to_numeric(df_vendas['custo_real'], errors='coerce').fillna(0)
         
         for _, r in df_vendas[['filial', 'loja']].drop_duplicates().iterrows():
             fid = r['filial']
             if fid not in resumo_lojas:
-                resumo_lojas[fid] = {'nome': r['loja'], 'vendas': 0.0, 'compras': 0.0, 'boletos': 0.0}
+                # Adicionamos custo e cmv no dicionário
+                resumo_lojas[fid] = {'nome': r['loja'], 'vendas': 0.0, 'compras': 0.0, 'boletos': 0.0, 'cupons': 0, 'custo': 0.0, 'cmv': 0.0}
         
+        # Agrupamentos
         agrup_v = df_vendas.groupby('filial')['venda_venda_real'].sum()
         for fid, val in agrup_v.items():
             resumo_lojas[fid]['vendas'] = float(val)
 
+        agrup_cup = df_vendas.groupby('filial')['qtd_cupons_validos'].sum()
+        for fid, val in agrup_cup.items():
+            resumo_lojas[fid]['cupons'] = int(val)
+            
+        agrup_custo = df_vendas.groupby('filial')['custo_real'].sum()
+        for fid, val in agrup_custo.items():
+            resumo_lojas[fid]['custo'] = float(val)
+            
+        # Calcula a porcentagem do CMV (Custo / Venda * 100)
+        for fid in resumo_lojas:
+            if resumo_lojas[fid]['vendas'] > 0:
+                resumo_lojas[fid]['cmv'] = (resumo_lojas[fid]['custo'] / resumo_lojas[fid]['vendas']) * 100
+
     # =========================================================================
-    # CONSULTA: COMPRAS
+    # CONSULTA: COMPRAS (Via Supabase)
     # =========================================================================
-    if config.AMBIENTE_ATUAL == "LOCAL":
-        try:
-            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
-            query_compras = """
-                SELECT filial, loja, valor_total 
-                FROM vw_resumo_notas_fiscais 
-                WHERE data_emissao >= ? AND data_emissao <= ?
-            """
-            df_compras = pd.read_sql(query_compras, conn, params=(data_inicio + " 00:00:00", data_fim + " 23:59:59"))
-            conn.close()
-        except Exception as e:
-            print(f"Erro Compras Local (Resumo): {e}")
-            df_compras = pd.DataFrame(columns=['filial', 'loja', 'valor_total'])
-    else:
-        try:
-            r_compras = supabase.table("vw_resumo_notas_fiscais") \
-                .select("filial, loja, valor_total") \
-                .gte("data_emissao", data_inicio + " 00:00:00") \
-                .lte("data_emissao", data_fim + " 23:59:59") \
-                .execute()
-            df_compras = pd.DataFrame(r_compras.data)
-        except Exception as e:
-            print(f"Erro Compras Supabase (Resumo): {e}")
-            df_compras = pd.DataFrame(columns=['filial', 'loja', 'valor_total'])
+    try:
+        r_compras = supabase.table("vw_resumo_notas_fiscais") \
+            .select("filial, loja, valor_total") \
+            .gte("data_emissao", data_inicio + " 00:00:00") \
+            .lte("data_emissao", data_fim + " 23:59:59") \
+            .execute()
+        df_compras = pd.DataFrame(r_compras.data)
+    except Exception as e:
+        print(f"Erro Compras Supabase (Resumo): {e}")
+        df_compras = pd.DataFrame(columns=['filial', 'loja', 'valor_total'])
 
     # Processamento Compras
     if not df_compras.empty:
@@ -488,42 +487,26 @@ def obter_resumo_rapido_fast(modo, data_iso):
         for _, r in df_compras[['filial', 'loja']].drop_duplicates().iterrows():
             fid = r['filial']
             if fid not in resumo_lojas:
-                resumo_lojas[fid] = {'nome': r['loja'], 'vendas': 0.0, 'compras': 0.0, 'boletos': 0.0}
+                # LOCAL 2: Inicializando com 'cupons': 0 (Rede de Segurança)
+                resumo_lojas[fid] = {'nome': r['loja'], 'vendas': 0.0, 'compras': 0.0, 'boletos': 0.0, 'cupons': 0}
         
         agrup_c = df_compras.groupby('filial')['valor_total'].sum()
         for fid, val in agrup_c.items():
             resumo_lojas[fid]['compras'] = float(val)
 
     # =========================================================================
-    # CONSULTA: VENDEDORES (Traz o mês todo e filtra a data na RAM p/ evitar erro de formato)
+    # CONSULTA: VENDEDORES (Via Supabase)
     # =========================================================================
-    ano_str = str(data_alvo.year)
-    mes_str = str(data_alvo.month).zfill(2)
-    
-    if config.AMBIENTE_ATUAL == "LOCAL":
-        try:
-            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
-            query_vend = """
-                SELECT data_venda, vendedor, valor_total_vendido 
-                FROM vw_vendas_por_vendedor 
-                WHERE data_venda LIKE ? OR data_venda LIKE ?
-            """
-            df_vend = pd.read_sql(query_vend, conn, params=(f"{ano_str}-{mes_str}%", f"%/{mes_str}/{ano_str}"))
-            conn.close()
-        except Exception as e:
-            print(f"Erro Vendedores Local (Resumo): {e}")
-            df_vend = pd.DataFrame(columns=['data_venda', 'vendedor', 'valor_total_vendido'])
-    else:
-        try:
-            r_vend = supabase.table("vw_vendas_por_vendedor") \
-                .select("data_venda, vendedor, valor_total_vendido") \
-                .gte("data_venda", data_inicio) \
-                .lte("data_venda", data_fim) \
-                .execute()
-            df_vend = pd.DataFrame(r_vend.data)
-        except Exception as e:
-            print(f"Erro Vendedores Supabase (Resumo): {e}")
-            df_vend = pd.DataFrame(columns=['data_venda', 'vendedor', 'valor_total_vendido'])
+    try:
+        r_vend = supabase.table("vw_vendas_por_vendedor") \
+            .select("data_venda, vendedor, valor_total_vendido") \
+            .gte("data_venda", data_inicio) \
+            .lte("data_venda", data_fim) \
+            .execute()
+        df_vend = pd.DataFrame(r_vend.data)
+    except Exception as e:
+        print(f"Erro Vendedores Supabase (Resumo): {e}")
+        df_vend = pd.DataFrame(columns=['data_venda', 'vendedor', 'valor_total_vendido'])
 
     # Processamento Vendedores
     if not df_vend.empty:
@@ -545,38 +528,22 @@ def obter_resumo_rapido_fast(modo, data_iso):
                         'total': float(r['valor_total_vendido'])
                     })
 
-    # Ordenar vendedores do maior para o menor
     resumo_vendedores = sorted(resumo_vendedores, key=lambda x: x['total'], reverse=True)
 
     # =========================================================================
-    # CONSULTA: ENTREGAS
+    # CONSULTA: ENTREGAS (Via Supabase)
     # =========================================================================
-    if config.AMBIENTE_ATUAL == "LOCAL":
-        try:
-            conn = conectar_sqlite_seguro(CAMINHO_BANCO_LOCAL)
-            # Trazemos a coluna 'motoboy' da View
-            query_ent = """
-                SELECT motoboy 
-                FROM vw_logistica_entregas 
-                WHERE data_entrega >= ? AND data_entrega <= ? AND status_entrega = 'F'
-            """
-            df_ent = pd.read_sql(query_ent, conn, params=(data_inicio, data_fim))
-            conn.close()
-        except Exception as e:
-            print(f"Erro Entregas Local (Resumo): {e}")
-            df_ent = pd.DataFrame(columns=['motoboy'])
-    else:
-        try:
-            r_ent = supabase.table("vw_logistica_entregas") \
-                .select("motoboy") \
-                .gte("data_entrega", data_inicio) \
-                .lte("data_entrega", data_fim) \
-                .eq("status_entrega", "F") \
-                .execute()
-            df_ent = pd.DataFrame(r_ent.data)
-        except Exception as e:
-            print(f"Erro Entregas Supabase (Resumo): {e}")
-            df_ent = pd.DataFrame(columns=['motoboy'])
+    try:
+        r_ent = supabase.table("vw_logistica_entregas") \
+            .select("motoboy") \
+            .gte("data_entrega", data_inicio) \
+            .lte("data_entrega", data_fim) \
+            .eq("status_entrega", "F") \
+            .execute()
+        df_ent = pd.DataFrame(r_ent.data)
+    except Exception as e:
+        print(f"Erro Entregas Supabase (Resumo): {e}")
+        df_ent = pd.DataFrame(columns=['motoboy'])
 
     total_entregas = len(df_ent)
     dados_motoboys = []
@@ -584,7 +551,6 @@ def obter_resumo_rapido_fast(modo, data_iso):
     # Processamento e Agrupamento dos Motoboys
     if not df_ent.empty:
         df_ent['motoboy'] = df_ent['motoboy'].astype(str).str.strip().str.upper()
-        # Conta quantas vezes cada motoboy aparece no DataFrame
         agrup_ent = df_ent.groupby('motoboy').size().reset_index(name='corridas')
         for _, r in agrup_ent.iterrows():
             dados_motoboys.append({
@@ -592,7 +558,6 @@ def obter_resumo_rapido_fast(modo, data_iso):
                 'corridas': int(r['corridas'])
             })
             
-    # Ordena os motoboys pelo volume de corridas (do maior para o menor)
     dados_motoboys = sorted(dados_motoboys, key=lambda x: x['corridas'], reverse=True)
 
     return resumo_lojas, resumo_vendedores, total_entregas, dados_motoboys

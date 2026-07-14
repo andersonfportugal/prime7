@@ -23,6 +23,11 @@ def desenhar_tela_resumo():
         container_compras = ui.column().classes("w-full gap-2")
         ui.button("FECHAR", on_click=dialog_compras.close).props("flat size=sm").classes(f"w-full mt-2 {cor['texto_secundario']} font-black tracking-widest")
 
+    dialog_cmv = ui.dialog()
+    with dialog_cmv, ui.card().classes(f"w-full max-w-sm p-5 rounded-2xl {cor['fundo_card']} border {cor['borda']} gap-3"):
+        container_cmv = ui.column().classes("w-full gap-2")
+        ui.button("FECHAR", on_click=dialog_cmv.close).props("flat size=sm").classes(f"w-full mt-2 {cor['texto_secundario']} font-black tracking-widest")
+
     # Envelope mestre para atualização reativa
     container_mestre = ui.column().classes("w-full m-0 p-0 gap-0")
 
@@ -99,6 +104,30 @@ def desenhar_tela_resumo():
                                         ui.label(f"NFe {nota['numero_nota']}").classes(f"text-[8px] font-bold {cor['texto_secundario']}")
                                     ui.label(f"R$ {formatar_moeda_brasil(nota['valor_total'])}").classes(f"text-xs font-black {cor['compras_destaque']} shrink-0")
                 dialog_compras.open()
+            
+            def abrir_modal_cmv(fid, nome_loja):
+                container_cmv.clear()
+                with container_cmv:
+                    ui.label(nome_loja).classes(f"text-[9px] font-black {cor['texto_secundario']} tracking-widest uppercase")
+                    texto_sub = f"Custo (CMV) do Dia {data_atual.strftime('%d/%m/%Y')}" if modo_atual == 'DIA' else "Custo (CMV) do Mês"
+                    ui.label(texto_sub).classes(f"text-sm font-black {cor['destaque']} mb-2")
+                    
+                    info_loja = dados_lojas.get(str(fid), {})
+                    custo_abs = info_loja.get('custo', 0)
+                    cmv_percentual = info_loja.get('cmv', 0)
+                    vendas_abs = info_loja.get('vendas', 0)
+
+                    if custo_abs == 0:
+                        ui.label("Sem movimentação de custo no período.").classes(f"text-xs italic {cor['texto_secundario']} my-4 text-center w-full")
+                    else:
+                        with ui.row().classes(f"w-full justify-between items-center {cor['fundo_tela']} p-2.5 rounded-xl border {cor['borda']}"):
+                            ui.label("Custo dos produtos").classes(f"text-xs font-bold {cor['texto_secundario']}")
+                            ui.label(f"R$ {formatar_moeda_brasil(custo_abs)}").classes(f"text-xs font-black !{cor['texto_principal']}")
+                            
+                        with ui.row().classes(f"w-full justify-between items-center {cor['fundo_tela']} p-2.5 rounded-xl border {cor['borda']}"):
+                            ui.label("Percentual (CMV)").classes(f"text-xs font-bold {cor['texto_secundario']}")
+                            ui.label(f"{cmv_percentual:.1f}%").classes(f"text-xs font-black {cor['destaque']}")
+                dialog_cmv.open()
 
             # =========================================================================
             # GESTÃO DA ORDENAÇÃO DA EQUIPE
@@ -155,7 +184,7 @@ def desenhar_tela_resumo():
                 with ui.row().classes(f"w-full max-w-sm justify-between items-center {cor['fundo_card']} p-2 rounded-2xl shadow-sm border {cor['borda']}"):
                     ui.button(icon="chevron_left", on_click=voltar_tempo).props("flat round size=sm").classes(cor['texto_secundario'])
                     with ui.column().classes("items-center gap-0"):
-                        ui.label("PERÍODO SELECIONADO").classes(f"text-[8px] font-black {cor['texto_secundario']} tracking-widest uppercase")
+                        ui.label("DATA").classes(f"text-[8px] font-black {cor['texto_secundario']} tracking-widest uppercase")
                         ui.label(formatar_data_exibicao()).classes(f"text-base font-black !{cor['texto_principal']} tracking-wider")
                     ui.button(icon="chevron_right", on_click=avancar_tempo).props("flat round size=sm").classes(cor['texto_secundario'])
 
@@ -190,17 +219,35 @@ def desenhar_tela_resumo():
                                     ui.label(f"R$ {formatar_moeda_brasil(info_loja.get('compras', 0))}").classes(f"text-base font-black !{cor['texto_principal']}")
                                     ui.button(icon="search", on_click=lambda l=id_loja, n=info_loja['nome']: abrir_modal_compras(l, n)).props("flat round size=xs").classes(cor['texto_secundario'])
                                 
-                                # Card de Boletos da Filial
-                            with ui.row().classes(f"w-full justify-between items-center p-3 hover:bg-black/5 transition-colors opacity-80"):
+                            # Card de Boletos da Filial (Removido opacity-80)
+                            with ui.row().classes(f"w-full justify-between items-center p-3 border-b {cor['borda']} hover:bg-black/5 transition-colors"):
                                 with ui.row().classes("items-center gap-2"):
                                     ui.icon("receipt", size="sm").classes(cor['boletos_destaque'])
                                     ui.label("Boletos").classes(f"text-sm font-bold {cor['boletos_titulo']}")
                                 with ui.row().classes("items-center gap-2"):
                                     ui.label(f"R$ {formatar_moeda_brasil(info_loja.get('boletos', 0))}").classes(f"text-base font-black !{cor['texto_principal']}")
 
+                            # Card de Cupons da Filial (Removido opacity-80 e adicionado border-b pois não é mais o último)
+                            with ui.row().classes(f"w-full justify-between items-center p-3 border-b {cor['borda']} hover:bg-black/5 transition-colors"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.icon("local_activity", size="sm").classes(cor['boletos_destaque'])
+                                    ui.label("Cupons").classes(f"text-sm font-bold {cor['boletos_titulo']}")
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.label(f"{info_loja.get('cupons', 0)}").classes(f"text-base font-black !{cor['texto_principal']}")
+
+                            # NOVO: Card do CMV (Ícone colorido, texto padrão igual aos outros)
+                            with ui.row().classes(f"w-full justify-between items-center p-3 hover:bg-black/5 transition-colors"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.icon("donut_large", size="sm").classes(cor['destaque']) 
+                                    ui.label("CMV").classes(f"text-sm font-bold !{cor['texto_principal']}")
+                                with ui.row().classes("items-center gap-2"):
+                                    cmv_percentual = info_loja.get('cmv', 0)
+                                    ui.label(f"{cmv_percentual:.1f}%").classes(f"text-base font-black !{cor['texto_principal']}")
+                                    ui.button(icon="search", on_click=lambda l=id_loja, n=info_loja['nome']: abrir_modal_cmv(l, n)).props("flat round size=xs").classes(cor['texto_secundario'])
+
                 # Seção de Atendimento dos Vendedores
                 with ui.row().classes("w-full justify-between items-end mt-2 px-1"):
-                    ui.label("PERFORMANCE DE VENDAS").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest")
+                    ui.label("VENDEDORES").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest")
                     ui.button(icon=icone_sort, on_click=abrir_ou_fechar_ordenacao).props("flat round size=xs").classes(f"{cor['texto_secundario']} -mb-2 hover:brightness-125").tooltip(dica_sort)
 
                 with ui.card().classes(f"w-full p-3 rounded-2xl shadow-sm border {cor['borda']} {cor['fundo_card']} gap-3"):
@@ -221,7 +268,7 @@ def desenhar_tela_resumo():
                     with ui.row().classes(f"w-full justify-between items-center border-b {cor['borda']} pb-2"):
                         with ui.row().classes("items-center gap-2"):
                             ui.icon("two_wheeler", size="sm").classes(cor['texto_secundario'])
-                            ui.label("Corridas Concluídas").classes(f"text-xs font-bold !{cor['texto_principal']}")
+                            ui.label("ENTREGAS").classes(f"text-xs font-bold !{cor['texto_principal']}")
                         ui.label(f"{total_entregas} totais").classes(f"text-sm font-black !{cor['texto_principal']}")
                     
                     # Lista: Ranking de Motoboys
