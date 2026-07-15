@@ -29,8 +29,8 @@ def desenhar_tela_dashboard_principal():
     # --- CABEÇALHO ---
     with ui.row().classes(f"w-full justify-between items-center mb-4 {cor['fundo_card']} p-4 rounded-2xl shadow-sm border {cor['borda']} flex-wrap gap-4"):
         with ui.column().classes("gap-1"):
-            ui.label("Visão Mensal Consolidada").classes(f"{cor['destaque']} text-lg font-black tracking-widest uppercase")
-            ui.label("Dashboard financeiro de todas as filiais").classes(f"text-xs {cor['texto_secundario']}")
+            ui.label("Dashboard mensal").classes(f"{cor['destaque']} text-lg font-black tracking-widest uppercase")
+            #ui.label("Dashboard financeiro de todas as filiais").classes(f"text-xs {cor['texto_secundario']}")
 
         # Extração de dados chamando os Motores (Execução Única super rápida)
     dados, totais, mapa_lojas, quant_dias = obter_dados_dashboard_fast(mes_atual, ano_atual)
@@ -125,86 +125,133 @@ def desenhar_tela_dashboard_principal():
 
 
     # =====================================================================================
-    # --- CARTÕES SUPERIORES SEMÂNTICOS ---
+    # --- FUNÇÕES DOS CARTÕES SUPERIORES ---
     # =====================================================================================
-    with ui.row().classes("w-full flex-nowrap gap-4 overflow-x-auto pb-4 items-stretch"):
-        ui.column().classes("w-20 shrink-0 bg-transparent")
+    def desenhar_cartao_vendas():
+        with ui.card().classes(f"w-full flex-1 min-w-[250px] p-2 md:p-3 rounded-xl {cor['vendas_bg']} border {cor['vendas_borda']} shadow-none gap-0"):
+            ui.label("Vendas").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['vendas_titulo']} mb-0")
+            soma_geral = sum(totais.get(f"vend_{fid}", 0.0) for fid in mapa_lojas)
+            ui.label(f"R$ {formatar_moeda_brasil(soma_geral)}").classes(f"text-lg md:text-xl font-bold {cor['vendas_destaque']} tracking-tighter mb-1")
+            with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
+                for fid, nome_loja in mapa_lojas.items():
+                    val = totais.get(f"vend_{fid}", 0.0)
+                    ui.label(f"{nome_loja}: R$ {formatar_moeda_brasil(val)}").classes(f"text-[9px] font-bold {cor['vendas_titulo']}")
 
-        def desenhar_cartao_vendas():
-            with ui.card().classes(f"flex-1 min-w-[280px] p-2 md:p-3 rounded-xl {cor['vendas_bg']} border {cor['vendas_borda']} shadow-none gap-0"):
-                ui.label("Vendas").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['vendas_titulo']} mb-0")
-                soma_geral = sum(totais.get(f"vend_{fid}", 0.0) for fid in mapa_lojas)
-                ui.label(f"R$ {formatar_moeda_brasil(soma_geral)}").classes(f"text-lg md:text-xl font-bold {cor['vendas_destaque']} tracking-tighter mb-1")
-                with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
-                    for fid, nome_loja in mapa_lojas.items():
-                        val = totais.get(f"vend_{fid}", 0.0)
-                        ui.label(f"{nome_loja}: R$ {formatar_moeda_brasil(val)}").classes(f"text-[9px] font-bold {cor['vendas_titulo']}")
+    def desenhar_cartao_boletos():
+        with ui.card().classes(f"w-full flex-1 min-w-[250px] p-2 md:p-3 rounded-xl {cor['boletos_bg']} border {cor['boletos_borda']} shadow-none gap-0 opacity-80"):
+            ui.label("Boletos").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['boletos_titulo']} mb-0")
+            ui.label("R$ 0,00").classes(f"text-lg md:text-xl font-bold {cor['boletos_destaque']} tracking-tighter mb-1")
+            with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
+                ui.label("Aguardando implantação").classes(f"text-[9px] font-bold {cor['boletos_titulo']} italic")
 
-        def desenhar_cartao_boletos():
-            with ui.card().classes(f"flex-1 min-w-[280px] p-2 md:p-3 rounded-xl {cor['boletos_bg']} border {cor['boletos_borda']} shadow-none gap-0 opacity-80"):
-                ui.label("Boletos").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['boletos_titulo']} mb-0")
-                ui.label("R$ 0,00").classes(f"text-lg md:text-xl font-bold {cor['boletos_destaque']} tracking-tighter mb-1")
-                with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
-                    ui.label("Aguardando implantação").classes(f"text-[9px] font-bold {cor['boletos_titulo']} italic")
+    def desenhar_cartao_compras():
+        with ui.card().classes(f"w-full flex-1 min-w-[250px] p-2 md:p-3 rounded-xl {cor['compras_bg']} border {cor['compras_borda']} shadow-none gap-0"):
+            ui.label("Compras").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['compras_titulo']} mb-0")
+            soma_geral = sum(totais.get(f"comp_{fid}", 0.0) for fid in mapa_lojas)
+            ui.label(f"R$ {formatar_moeda_brasil(soma_geral)}").classes(f"text-lg md:text-xl font-bold {cor['compras_destaque']} tracking-tighter mb-1")
+            with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
+                for fid, nome_loja in mapa_lojas.items():
+                    val = totais.get(f"comp_{fid}", 0.0)
+                    ui.label(f"{nome_loja}: R$ {formatar_moeda_brasil(val)}").classes(f"text-[9px] font-bold {cor['compras_titulo']}")
 
-        def desenhar_cartao_compras():
-            with ui.card().classes(f"flex-1 min-w-[280px] p-2 md:p-3 rounded-xl {cor['compras_bg']} border {cor['compras_borda']} shadow-none gap-0"):
-                ui.label("Compras").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['compras_titulo']} mb-0")
-                soma_geral = sum(totais.get(f"comp_{fid}", 0.0) for fid in mapa_lojas)
-                ui.label(f"R$ {formatar_moeda_brasil(soma_geral)}").classes(f"text-lg md:text-xl font-bold {cor['compras_destaque']} tracking-tighter mb-1")
-                with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
-                    for fid, nome_loja in mapa_lojas.items():
-                        val = totais.get(f"comp_{fid}", 0.0)
-                        ui.label(f"{nome_loja}: R$ {formatar_moeda_brasil(val)}").classes(f"text-[9px] font-bold {cor['compras_titulo']}")
-
-        def desenhar_cartao_despesas():
-            with ui.card().classes(f"flex-1 min-w-[280px] p-2 md:p-3 rounded-xl {cor['despesas_bg']} border {cor['despesas_borda']} shadow-none gap-0 opacity-80"):
-                ui.label("Despesas").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['despesas_titulo']} mb-0")
-                ui.label("R$ 0,00").classes(f"text-lg md:text-xl font-bold {cor['despesas_destaque']} tracking-tighter mb-1")
-                with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
-                    ui.label("Aguardando implantação").classes(f"text-[9px] font-bold {cor['despesas_titulo']} italic")
-
-        desenhar_cartao_vendas()
-        desenhar_cartao_boletos()
-        desenhar_cartao_compras()
-        desenhar_cartao_despesas()
+    def desenhar_cartao_despesas():
+        with ui.card().classes(f"w-full flex-1 min-w-[250px] p-2 md:p-3 rounded-xl {cor['despesas_bg']} border {cor['despesas_borda']} shadow-none gap-0 opacity-80"):
+            ui.label("Despesas").classes(f"text-[10px] font-bold tracking-widest uppercase {cor['despesas_titulo']} mb-0")
+            ui.label("R$ 0,00").classes(f"text-lg md:text-xl font-bold {cor['despesas_destaque']} tracking-tighter mb-1")
+            with ui.row().classes(f"w-full justify-between items-center border-t {cor['borda']} pt-1 mt-1"):
+                ui.label("Aguardando implantação").classes(f"text-[9px] font-bold {cor['despesas_titulo']} italic")
 
     # =====================================================================================
-    # --- GRID GIGANTE DE TABELAS (RESTAURADO COM AS CORES ORIGINAIS) ---
+    # --- VISÃO DESKTOP (PC) --- O tabelão gigante lado a lado
     # =====================================================================================
-    with ui.row().classes("w-full flex-nowrap gap-4 overflow-x-auto pb-4 items-stretch"):
-        def desenhar_bloco_tabela(titulo, sub_titulo, bg_head, txt_head, bg_table, tamanho, prefixo):
-            with ui.column().classes(f"gap-0 rounded-2xl shadow-lg {cor['fundo_card']} overflow-hidden border {cor['borda']} {tamanho}"):
-                
-                with ui.column().classes(f"w-full items-center justify-center {bg_head} {txt_head} py-2 border-b {cor['borda']} gap-0"):
-                    ui.label(titulo).classes("font-black text-sm tracking-widest uppercase")
-                    if sub_titulo:
-                        ui.label(sub_titulo).classes("text-[8px] font-bold opacity-70 tracking-widest uppercase")
-                
-                cols = []
-                if prefixo == "dia":
-                    cols.append({"name": "dia", "label": "Dia", "field": "dia", "align": "center", "classes": f"{cor['fundo_tela']} font-bold !{cor['texto_principal']}", "headerClasses": f"{bg_head} {txt_head} font-bold"})
-                else:
-                    if not mapa_lojas:
-                        cols.append({"name": "vazio", "label": "SEM DADOS", "field": "vazio", "align": "center", "classes": f"{cor['texto_secundario']} italic"})
-                    for fid, nome_loja in mapa_lojas.items():
-                        cols.append({"name": str(fid), "label": nome_loja, "field": f"{prefixo}_{fid}", "align": "right", "classes": f"!{cor['texto_principal']}", "headerClasses": f"{bg_head} {txt_head} font-bold"})
-                
-                tabela = ui.table(columns=cols, rows=dados, row_key="dia").props(
-                    f'flat bordered dense separator="cell" hide-bottom hide-pagination :pagination="{{rowsPerPage: {quant_dias}}}" hover'
-                ).classes(f"w-full {bg_table} !{cor['texto_principal']}")
+    # A classe 'gt-sm' (Greater Than Small) esconde este bloco inteiro no celular
+    with ui.column().classes("w-full gt-sm gap-0"):
+        
+        with ui.row().classes("w-full flex-nowrap gap-4 overflow-x-auto pb-4 items-stretch"):
+            ui.column().classes("w-20 shrink-0 bg-transparent") # Espaçador alinhado com a coluna dia
+            desenhar_cartao_vendas()
+            desenhar_cartao_boletos()
+            desenhar_cartao_compras()
+            desenhar_cartao_despesas()
 
-                # GATILHOS DE CLIQUE PARA AS DUAS COLUNAS
-                if prefixo == "vend":
-                    tabela.on('row-click', lambda e: abrir_detalhe_vendas_dia(e.args[1]['dia']))
-                    tabela.classes("cursor-pointer hover:shadow-inner transition-all")
-                elif prefixo == "comp":
-                    tabela.on('row-click', lambda e: abrir_detalhe_compras_dia(e.args[1]['dia']))
-                    tabela.classes("cursor-pointer hover:shadow-inner transition-all")
+        with ui.row().classes("w-full flex-nowrap gap-4 overflow-x-auto pb-4 items-stretch"):
+            def desenhar_bloco_tabela(titulo, sub_titulo, bg_head, txt_head, bg_table, tamanho, prefixo):
+                with ui.column().classes(f"gap-0 rounded-2xl shadow-lg {cor['fundo_card']} overflow-hidden border {cor['borda']} {tamanho}"):
+                    with ui.column().classes(f"w-full items-center justify-center {bg_head} {txt_head} py-2 border-b {cor['borda']} gap-0"):
+                        ui.label(titulo).classes("font-black text-sm tracking-widest uppercase")
+                        if sub_titulo:
+                            ui.label(sub_titulo).classes("text-[8px] font-bold opacity-70 tracking-widest uppercase")
+                    
+                    cols = []
+                    if prefixo == "dia":
+                        cols.append({"name": "dia", "label": "Dia", "field": "dia", "align": "center", "classes": f"{cor['fundo_tela']} font-bold !{cor['texto_principal']}", "headerClasses": f"{bg_head} {txt_head} font-bold"})
+                    else:
+                        if not mapa_lojas:
+                            cols.append({"name": "vazio", "label": "SEM DADOS", "field": "vazio", "align": "center", "classes": f"{cor['texto_secundario']} italic"})
+                        for fid, nome_loja in mapa_lojas.items():
+                            cols.append({"name": str(fid), "label": nome_loja, "field": f"{prefixo}_{fid}", "align": "right", "classes": f"!{cor['texto_principal']}", "headerClasses": f"{bg_head} {txt_head} font-bold"})
+                    
+                    tabela = ui.table(columns=cols, rows=dados, row_key="dia").props(
+                        f'flat bordered dense separator="cell" hide-bottom hide-pagination :pagination="{{rowsPerPage: {quant_dias}}}" hover'
+                    ).classes(f"w-full {bg_table} !{cor['texto_principal']}")
 
-        # Passando as variáveis exatas do dicionário para recriar as cores!
-        desenhar_bloco_tabela("Data", None, cor["tab_dia_head"], cor["tab_dia_txt"], cor["tab_dia_bg"], "w-20 shrink-0", "dia")
-        desenhar_bloco_tabela("Vendas", None, cor["tab_vend_head"], cor["tab_vend_txt"], cor["tab_vend_bg"], "flex-1 min-w-[280px]", "vend")
-        desenhar_bloco_tabela("Boletos", None, cor["tab_bol_head"], cor["tab_bol_txt"], cor["tab_bol_bg"], "flex-1 min-w-[280px]", "bol")
-        desenhar_bloco_tabela("Compras", None, cor["tab_comp_head"], cor["tab_comp_txt"], cor["tab_comp_bg"], "flex-1 min-w-[280px]", "comp")
-        desenhar_bloco_tabela("Despesas", None, cor["tab_desp_head"], cor["tab_desp_txt"], cor["tab_desp_bg"], "flex-1 min-w-[280px]", "desp")
+                    if prefixo == "vend":
+                        tabela.on('row-click', lambda e: abrir_detalhe_vendas_dia(e.args[1]['dia']))
+                        tabela.classes("cursor-pointer hover:shadow-inner transition-all")
+                    elif prefixo == "comp":
+                        tabela.on('row-click', lambda e: abrir_detalhe_compras_dia(e.args[1]['dia']))
+                        tabela.classes("cursor-pointer hover:shadow-inner transition-all")
+
+            desenhar_bloco_tabela("Data", None, cor["tab_dia_head"], cor["tab_dia_txt"], cor["tab_dia_bg"], "w-20 shrink-0", "dia")
+            desenhar_bloco_tabela("Vendas", None, cor["tab_vend_head"], cor["tab_vend_txt"], cor["tab_vend_bg"], "flex-1 min-w-[280px]", "vend")
+            desenhar_bloco_tabela("Boletos", None, cor["tab_bol_head"], cor["tab_bol_txt"], cor["tab_bol_bg"], "flex-1 min-w-[280px]", "bol")
+            desenhar_bloco_tabela("Compras", None, cor["tab_comp_head"], cor["tab_comp_txt"], cor["tab_comp_bg"], "flex-1 min-w-[280px]", "comp")
+            desenhar_bloco_tabela("Despesas", None, cor["tab_desp_head"], cor["tab_desp_txt"], cor["tab_desp_bg"], "flex-1 min-w-[280px]", "desp")
+
+    # =====================================================================================
+    # --- VISÃO MOBILE (Celular) --- Layout vertical com abas
+    # =====================================================================================
+    # A classe 'lt-md' (Less Than Medium) garante que isto apareça APENAS no celular
+    with ui.column().classes("w-full gap-3 pb-6 lt-md"):
+        
+        def desenhar_tabela_mobile(prefixo, bg_head, txt_head, bg_table):
+            cols = [
+                {"name": "dia", "label": "Dia", "field": "dia", "align": "center", "classes": f"{cor['fundo_tela']} font-bold !{cor['texto_principal']} w-1/4", "headerClasses": f"{bg_head} {txt_head} font-bold w-1/4"}
+            ]
+            if not mapa_lojas:
+                cols.append({"name": "vazio", "label": "SEM DADOS", "field": "vazio", "align": "center", "classes": f"{cor['texto_secundario']} italic"})
+            else:
+                for fid, nome_loja in mapa_lojas.items():
+                    cols.append({"name": str(fid), "label": nome_loja, "field": f"{prefixo}_{fid}", "align": "right", "classes": f"!{cor['texto_principal']} w-auto", "headerClasses": f"{bg_head} {txt_head} font-bold w-auto"})
+            
+            tabela = ui.table(columns=cols, rows=dados, row_key="dia").props(
+                f'flat bordered dense separator="cell" hide-bottom hide-pagination :pagination="{{rowsPerPage: {quant_dias}}}" hover'
+            ).classes(f"w-full {bg_table} !{cor['texto_principal']} rounded-xl shadow-md border {cor['borda']}")
+
+            if prefixo == "vend":
+                tabela.on('row-click', lambda e: abrir_detalhe_vendas_dia(e.args[1]['dia']))
+            elif prefixo == "comp":
+                tabela.on('row-click', lambda e: abrir_detalhe_compras_dia(e.args[1]['dia']))
+
+        with ui.tabs().classes(f'w-full {cor["fundo_card"]} rounded-xl border {cor["borda"]} shadow-sm').props('dense align="justify"') as tabs:
+            aba_vendas = ui.tab('Vendas').classes(f'text-[10px] font-bold {cor["vendas_titulo"]} flex-1')
+            aba_boletos = ui.tab('Boletos').classes(f'text-[10px] font-bold {cor["boletos_titulo"]} flex-1')
+            aba_compras = ui.tab('Compras').classes(f'text-[10px] font-bold {cor["compras_titulo"]} flex-1')
+            aba_despesas = ui.tab('Despesas').classes(f'text-[10px] font-bold {cor["despesas_titulo"]} flex-1')
+        
+        with ui.tab_panels(tabs, value=aba_vendas).classes('w-full bg-transparent p-0'):
+            with ui.tab_panel(aba_vendas).classes('p-0 gap-3 flex flex-col'):
+                desenhar_cartao_vendas()
+                desenhar_tabela_mobile("vend", cor["tab_vend_head"], cor["tab_vend_txt"], cor["tab_vend_bg"])
+            
+            with ui.tab_panel(aba_boletos).classes('p-0 gap-3 flex flex-col'):
+                desenhar_cartao_boletos()
+                desenhar_tabela_mobile("bol", cor["tab_bol_head"], cor["tab_bol_txt"], cor["tab_bol_bg"])
+            
+            with ui.tab_panel(aba_compras).classes('p-0 gap-3 flex flex-col'):
+                desenhar_cartao_compras()
+                desenhar_tabela_mobile("comp", cor["tab_comp_head"], cor["tab_comp_txt"], cor["tab_comp_bg"])
+                
+            with ui.tab_panel(aba_despesas).classes('p-0 gap-3 flex flex-col'):
+                desenhar_cartao_despesas()
+                desenhar_tabela_mobile("desp", cor["tab_desp_head"], cor["tab_desp_txt"], cor["tab_desp_bg"])

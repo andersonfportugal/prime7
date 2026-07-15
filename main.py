@@ -21,6 +21,7 @@ sessoes_ativas = {}
 
 app.add_static_files('/static', 'static')
 ui.add_head_html('<link rel="apple-touch-icon" sizes="180x180" href="/static/icon.png">', shared=True)
+ui.add_head_html('<link rel="icon" type="image/png" href="/static/icon.png">', shared=True)
 
 def limpar_memoria(client):
     if client.id in sessoes_ativas:

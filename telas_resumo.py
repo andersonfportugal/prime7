@@ -146,7 +146,7 @@ def desenhar_tela_resumo():
                 atualizar_tela()
 
             # =========================================================================
-            # CONTROLES TEMPORAIS
+            # CONTROLES TEMPORAIS & SELEÇÃO DIRETA
             # =========================================================================
             def alterar_modo(e):
                 app.storage.user['resumo_modo'] = e.value
@@ -170,6 +170,11 @@ def desenhar_tela_resumo():
                 app.storage.user['resumo_data'] = nova_data.isoformat()
                 atualizar_tela()
 
+            def obter_dia_da_semana():
+                """Retorna o dia da semana em português de forma simples"""
+                dias = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
+                return dias[data_atual.weekday()]
+
             def formatar_data_exibicao():
                 if modo_atual == 'DIA':
                     return data_atual.strftime("%d/%m/%Y")
@@ -177,17 +182,37 @@ def desenhar_tela_resumo():
                     meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
                     return f"{meses[data_atual.month - 1]} / {data_atual.year}"
 
+            def selecionar_data_direta(e):
+                """Callback disparado quando o usuário escolhe uma data no calendário flutuante"""
+                app.storage.user['resumo_data'] = e.value
+                # Se mudou o dia e estava em modo MÊS, podemos manter ou forçar para DIA, 
+                # mas manter a consistência do modo atual é o ideal.
+                atualizar_tela()
+
             # --- RENDERIZAÇÃO DO CABEÇALHO ---
             with ui.column().classes("w-full items-center gap-4 mb-4"):
                 ui.toggle(['DIA', 'MÊS'], value=modo_atual, on_change=alterar_modo).classes(f"font-bold {cor['destaque']} {cor['fundo_card']} shadow-sm rounded-full").props("unelevated size=sm")
                 
                 with ui.row().classes(f"w-full max-w-sm justify-between items-center {cor['fundo_card']} p-2 rounded-2xl shadow-sm border {cor['borda']}"):
                     ui.button(icon="chevron_left", on_click=voltar_tempo).props("flat round size=sm").classes(cor['texto_secundario'])
-                    with ui.column().classes("items-center gap-0"):
+                    
+                    # ÁREA CENTRAL: Clicável para abrir o calendário
+                    with ui.column().classes("items-center gap-0 cursor-pointer hover:scale-105 transition-transform") as area_data:
                         ui.label("DATA").classes(f"text-[8px] font-black {cor['texto_secundario']} tracking-widest uppercase")
                         ui.label(formatar_data_exibicao()).classes(f"text-base font-black !{cor['texto_principal']} tracking-wider")
-                    ui.button(icon="chevron_right", on_click=avancar_tempo).props("flat round size=sm").classes(cor['texto_secundario'])
+                        
+                        # EXIBIÇÃO DO DIA DA SEMANA (Apenas quando o modo for DIA)
+                        if modo_atual == 'DIA':
+                            ui.label(obter_dia_da_semana()).classes(f"text-[10px] font-bold {cor['texto_secundario']} -mt-0.5 lowercase")
+                        
+                        # MENU FLUTUANTE DO CALENDÁRIO (Agora sem o 'if', abre tanto no DIA quanto no MÊS)
+                        with ui.menu().props('anchor="bottom middle" self="top middle"').classes(f"p-1 rounded-2xl border {cor['borda']} {cor['fundo_card']} shadow-xl"):
+                            ui.date(value=app.storage.user['resumo_data'], on_change=selecionar_data_direta).props(
+                                f"flat color=primary {'dark' if cor['fundo_tela'] != 'bg-slate-50' else ''}"
+                            )
 
+                    ui.button(icon="chevron_right", on_click=avancar_tempo).props("flat round size=sm").classes(cor['texto_secundario'])
+            
             # --- RENDERIZAÇÃO DO CORPO ---
             container_mobile = ui.column().classes("w-full max-w-sm mx-auto gap-4 pb-8")
             with container_mobile:
