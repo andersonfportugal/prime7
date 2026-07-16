@@ -2,7 +2,7 @@ from nicegui import app
 
 paletas = {
     "PADRAO": {
-        "nome_amigavel": "Padrão",
+        "nome_amigavel": "Claro",
         "descricao": "O visual original limpo e semântico.",
         # --- CASCA GLOBAL ---
         "fundo_tela": "bg-slate-50",
@@ -30,7 +30,7 @@ paletas = {
     },
     
     "LUXO": {
-        "nome_amigavel": "Lux",
+        "nome_amigavel": "Escuro",
         "descricao": "Base chumbo elegante com detalhes em ouro, sem misturar cores.",
         # --- CASCA GLOBAL ---
         "fundo_tela": "bg-[#121212]",
@@ -174,7 +174,7 @@ paletas = {
     "tab_dia_bg": "bg-white"
 },
 "NOITE_ESTRELADA": {
-    "nome_amigavel": "Noite Estrelada",
+    "nome_amigavel": "Estrelas",
     "descricao": "Azul profundo inspirado em um céu estrelado.",
 
     "fundo_tela": "bg-[#0B1026]",
