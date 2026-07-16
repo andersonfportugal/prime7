@@ -254,5 +254,5 @@ if __name__ in {"__main__", "__mp_main__"}:
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
         storage_secret="chave_mestra_nediretor_2026",
-        favicon="/static/icontransp.png?v=2"  # <--- A MÁGICA DO ÍCONE NA ABA AQUI
+        favicon="static/icontransp.png" 
     )
