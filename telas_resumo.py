@@ -272,7 +272,7 @@ def desenhar_tela_resumo():
 
                 # Seção de Atendimento dos Vendedores
                 with ui.row().classes("w-full justify-between items-end mt-2 px-1"):
-                    ui.label("VENDEDORES").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest")
+                    ui.label("VENDAS").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest")
                     ui.button(icon=icone_sort, on_click=abrir_ou_fechar_ordenacao).props("flat round size=xs").classes(f"{cor['texto_secundario']} -mb-2 hover:brightness-125").tooltip(dica_sort)
 
                 with ui.card().classes(f"w-full p-3 rounded-2xl shadow-sm border {cor['borda']} {cor['fundo_card']} gap-3"):
@@ -285,7 +285,7 @@ def desenhar_tela_resumo():
                                 ui.label(f"R$ {formatar_moeda_brasil(vendedor['total'])}").classes(f"text-sm font-black {cor['destaque']}")
 
                 # Seção do Volume Logístico
-                ui.label("OPERAÇÃO LOGÍSTICA").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest mt-2 px-1")
+                ui.label("ENTREGAS").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest mt-2 px-1")
                 
                 with ui.card().classes(f"w-full p-3 rounded-2xl shadow-sm border {cor['borda']} {cor['fundo_card']} gap-3"):
                     

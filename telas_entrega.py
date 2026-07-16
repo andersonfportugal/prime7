@@ -116,7 +116,7 @@ def desenhar_tela_entregas_motoboys():
     # =============================================================================
     # SESSÃO 3: EVOLUÇÃO ANUAL (TRANSPOSIÇÃO MOBILE-FIRST COM FILTROS)
     # =============================================================================
-    ui.label(f"RELATÓRIO CONSOLIDADO: FROTA - {ano_atual}").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest px-1 mt-4")
+    ui.label(f"ACOMPANHAMENTO - {ano_atual}").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest px-1 mt-4")
     container_tabela_anual = ui.column().classes("w-full gap-2")
 
     # Resgata a lista original de motoboys e o estado salvo das marcações

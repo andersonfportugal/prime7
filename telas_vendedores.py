@@ -106,7 +106,7 @@ def desenhar_tela_performance_vendedores():
             # =============================================================================
             # BLOCO 2: EVOLUÇÃO ANUAL (TRANSPOSIÇÃO MOBILE-FIRST)
             # =============================================================================
-            ui.label(f"RELATÓRIO CONSOLIDADO: VENDAS - {ano_atual}").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest px-1 mt-4")
+            ui.label(f"ACOMPANHAMENTO ANUAL - {ano_atual}").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest px-1 mt-4")
             
             meses_abrev = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
             
