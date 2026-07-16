@@ -21,7 +21,7 @@ def desenhar_ecra_login():
             with ui.column().classes("items-center gap-1 w-full"):
                 ui.icon("admin_panel_settings", size="3xl").classes(f"{cor['destaque']} mb-2")
                 ui.label("NeDiretor").classes(f"text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r {cor['gradiente_titulo']} tracking-tighter")
-                ui.label("ACESSO RESTRITO").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest uppercase")
+                ui.label("LOGIN").classes(f"text-[10px] font-black {cor['texto_secundario']} tracking-widest uppercase")
 
             classe_bg_separador = cor['borda'].replace('border-', 'bg-')
             ui.separator().classes(f"w-full {classe_bg_separador} my-2")

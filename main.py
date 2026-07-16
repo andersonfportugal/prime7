@@ -20,8 +20,8 @@ sessoes_ativas = {}
 # A cor foi removida daqui do topo para ser chamada de forma segura dentro da página do utilizador!
 
 app.add_static_files('/static', 'static')
-ui.add_head_html('<link rel="apple-touch-icon" sizes="180x180" href="/static/icon.png">', shared=True)
-ui.add_head_html('<link rel="icon" type="image/png" href="/static/icon.png">', shared=True)
+ui.add_head_html('<link rel="apple-touch-icon" sizes="180x180" href="/static/icontransp.png">', shared=True)
+ui.add_head_html('<link rel="icon" type="image/png" href="/static/icontransp.png">', shared=True)
 
 def limpar_memoria(client):
     if client.id in sessoes_ativas:
@@ -107,8 +107,9 @@ def painel_principal():
         # Lado Esquerdo: Menu e Logo
         with ui.row().classes("items-center gap-1 md:gap-3 shrink-0"):
             ui.button(icon="menu", on_click=lambda: drawer.toggle()).props("flat round size=sm").classes(cor['destaque'])
+            #ui.image('/static/icon.png').classes('w-7 h-7 md:w-10 md:h-10 shrink-0 object-contain')
             # Removido o 'hidden'. Usando text-lg (pequeno) no celular para caber e md:text-3xl (grande) no PC
-            ui.label("ADiretor").classes(f"text-lg md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r {cor['gradiente_titulo']} tracking-tighter")
+            ui.label("Liberty").classes(f"text-lg md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r {cor['gradiente_titulo']} tracking-tighter")
         
         # Lado Direito: Filtros, Temas e Sair
         with ui.row().classes("items-center gap-1 md:gap-2 flex-nowrap shrink-0"):
@@ -248,9 +249,10 @@ def painel_principal():
 # =============================================================================
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
-        title="NeDiretor",
+        title="Liberty",
         language="pt-BR",
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
         storage_secret="chave_mestra_nediretor_2026",
+        favicon="/static/icontransp.png?v=2"  # <--- A MÁGICA DO ÍCONE NA ABA AQUI
     )

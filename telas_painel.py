@@ -43,15 +43,19 @@ def desenhar_tela_dashboard_principal():
     # MODAL 1: DRILL-DOWN DE VENDAS
     # =====================================================================================
     dialog_detalhe_vendas = ui.dialog()
-    with dialog_detalhe_vendas, ui.card().classes(f"w-full max-w-5xl p-6 rounded-2xl {cor['fundo_tela']} border {cor['borda']}"):
-        container_detalhe_vendas = ui.column().classes("w-full gap-4")
-        with ui.row().classes("w-full justify-end mb-[-20px] z-10"):
-            ui.button(icon="close", on_click=dialog_detalhe_vendas.close).props("flat round size=sm").classes(cor['texto_secundario'])
+    # Adicionamos a classe 'relative' no card principal
+    with dialog_detalhe_vendas, ui.card().classes(f"relative w-full max-w-5xl p-6 rounded-2xl {cor['fundo_tela']} border {cor['borda']}"):
+        
+        # Botão com posição absoluta no topo direito (top-2 right-2)
+        ui.button(icon="close", on_click=dialog_detalhe_vendas.close).props("flat round size=sm").classes(f"absolute top-2 right-2 z-50 {cor['texto_secundario']}")
+        
+        # Container de conteúdo (adicionei um pt-4 para não encavalar com o botão)
+        container_detalhe_vendas = ui.column().classes("w-full gap-4 pt-4")
 
     def abrir_detalhe_vendas_dia(dia_clicado):
         container_detalhe_vendas.clear()
         with container_detalhe_vendas:
-            ui.label(f"Detalhamento de Faturamento - Dia {dia_clicado}/{mes_atual:02d}/{ano_atual}").classes(f"text-lg font-black {cor['vendas_titulo']} tracking-widest uppercase mb-4")
+            ui.label(f"Detalhamento Diario {dia_clicado}/{mes_atual:02d}/{ano_atual}").classes(f"text-lg font-black {cor['vendas_titulo']} tracking-widest uppercase mb-4")
             if not mapa_lojas_pgto:
                 ui.label("Banco de dados não retornou meios de pagamento.").classes(f"{cor['texto_secundario']} italic text-sm")
             else:
@@ -80,11 +84,14 @@ def desenhar_tela_dashboard_principal():
     # MODAL 2: DRILL-DOWN DE COMPRAS
     # =====================================================================================
     dialog_detalhe_compras = ui.dialog()
-    with dialog_detalhe_compras, ui.card().classes(f"w-full max-w-5xl p-6 rounded-2xl {cor['fundo_tela']} border {cor['borda']}"):
-        container_detalhe_compras = ui.column().classes("w-full gap-4")
-        with ui.row().classes("w-full justify-end mb-[-20px] z-10"):
-            ui.button(icon="close", on_click=dialog_detalhe_compras.close).props("flat round size=sm").classes(cor['texto_secundario'])
-
+    # Adicionamos a classe 'relative' no card principal
+    with dialog_detalhe_compras, ui.card().classes(f"relative w-full max-w-5xl p-6 rounded-2xl {cor['fundo_tela']} border {cor['borda']}"):
+        
+        # Botão com posição absoluta no topo direito (top-2 right-2)
+        ui.button(icon="close", on_click=dialog_detalhe_compras.close).props("flat round size=sm").classes(f"absolute top-2 right-2 z-50 {cor['texto_secundario']}")
+        
+        # Container de conteúdo 
+        container_detalhe_compras = ui.column().classes("w-full gap-4 pt-4")
     def abrir_detalhe_compras_dia(dia_clicado):
         container_detalhe_compras.clear()
         
@@ -234,10 +241,10 @@ def desenhar_tela_dashboard_principal():
                 tabela.on('row-click', lambda e: abrir_detalhe_compras_dia(e.args[1]['dia']))
 
         with ui.tabs().classes(f'w-full {cor["fundo_card"]} rounded-xl border {cor["borda"]} shadow-sm').props('dense align="justify"') as tabs:
-            aba_vendas = ui.tab('Vendas').classes(f'text-[10px] font-bold {cor["vendas_titulo"]} flex-1')
-            aba_boletos = ui.tab('Boletos').classes(f'text-[10px] font-bold {cor["boletos_titulo"]} flex-1')
-            aba_compras = ui.tab('Compras').classes(f'text-[10px] font-bold {cor["compras_titulo"]} flex-1')
-            aba_despesas = ui.tab('Despesas').classes(f'text-[10px] font-bold {cor["despesas_titulo"]} flex-1')
+            aba_vendas = ui.tab('Vendas').classes(f'text-[9px] font-bold {cor["vendas_titulo"]} flex-1 min-w-0 px-1')
+            aba_boletos = ui.tab('Boletos').classes(f'text-[9px] font-bold {cor["boletos_titulo"]} flex-1 min-w-0 px-1')
+            aba_compras = ui.tab('Compras').classes(f'text-[9px] font-bold {cor["compras_titulo"]} flex-1 min-w-0 px-1')
+            aba_despesas = ui.tab('Despesas').classes(f'text-[9px] font-bold {cor["despesas_titulo"]} flex-1 min-w-0 px-1')
         
         with ui.tab_panels(tabs, value=aba_vendas).classes('w-full bg-transparent p-0'):
             with ui.tab_panel(aba_vendas).classes('p-0 gap-3 flex flex-col'):
